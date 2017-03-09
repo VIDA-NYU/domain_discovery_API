@@ -14,7 +14,7 @@ class word2vec:
         self.es = es
 
         if not from_es:
-            f = open(environ['DDT_HOME']+'/ranking/D_cbow_pdw_8B.pkl', 'rb')
+            f = open(environ['DD_API_HOME']+'/ranking/D_cbow_pdw_8B.pkl', 'rb')
             self.word_vec = load(f)
         
         if opt_docs != None:

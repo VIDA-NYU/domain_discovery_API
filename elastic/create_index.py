@@ -3,7 +3,7 @@ import json
 
 from config import es as default_es
 
-def create_index(es_index='memex', mapping=environ['DDT_HOME']+'/elastic/mapping.json', es=None):
+def create_index(es_index='memex', mapping=environ['DD_API_HOME']+'/elastic/mapping.json', es=None):
     if es is None:
         es = default_es
 
@@ -32,7 +32,7 @@ def create_terms_index(es_index='ddt_terms', es=None):
     if es is None:
         es = default_es
 
-    json_terms_data=open(environ['DDT_HOME']+'/elastic/mapping_terms.json').read()
+    json_terms_data=open(environ['DD_API_HOME']+'/elastic/mapping_terms.json').read()
 
     terms_mappings = json.loads(json_terms_data)
 
@@ -55,7 +55,7 @@ def create_config_index(es_index='config', es=None):
     if es is None:
         es = default_es
 
-    json_config_data=open(environ['DDT_HOME']+'/elastic/config.json').read()
+    json_config_data=open(environ['DD_API_HOME']+'/elastic/config.json').read()
 
     config_mappings = json.loads(json_config_data)
 

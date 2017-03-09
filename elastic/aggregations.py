@@ -6,7 +6,7 @@ def get_significant_terms(ids, termCount = 50, mapping=None, es_index='memex', e
     if es is None:
         es = default_es
 
-    with open(environ['DDT_HOME']+'/elastic/stopwords.txt', 'r') as f:
+    with open(environ['DD_API_HOME']+'/elastic/stopwords.txt', 'r') as f:
         stopwords = [word.strip() for word in f.readlines()]
 
     query = {

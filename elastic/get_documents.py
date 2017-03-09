@@ -46,7 +46,7 @@ def get_more_like_this(urls, fields=[], pageCount=200, es_index='memex', es_doc_
 
     docs = [{"_index": es_index, "_type": es_doc_type, "_id": url} for url in urls]
 
-    with open(environ['DDT_HOME']+'/elastic/stopwords.txt', 'r') as f:
+    with open(environ['DD_API_HOME']+'/elastic/stopwords.txt', 'r') as f:
         stopwords = [word.strip() for word in f.readlines()]
 
     query = {
