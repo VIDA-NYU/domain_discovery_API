@@ -48,7 +48,6 @@ class Page(object):
   def __init__(self, model, path):
     # Folder with html content.
     self._HTML_DIR = os.path.join(path, u"../client/build")
-    print "\n\n\n",self._HTML_DIR,"\n\n\n"
     self.lock = Lock()
     # TODO Use SeedCrawlerModelAdapter self._model = SeedCrawlerModelAdapter()
     self._model = model
@@ -61,7 +60,6 @@ class Page(object):
   # ]
   @cherrypy.expose
   def getAvailableDomains(self, type):
-    print "debug"
     res = self._model.getAvailableDomains()
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps({"crawlers":res, "type":type})
@@ -211,7 +209,6 @@ class Page(object):
     colors = self._model.getTagColors(session['domainId'])
     res = {"data": data}#//, "plot": selection_plot(data, colors)}
     cherrypy.response.headers["Content-Type"] = "application/json;"
-    print "\n\n\n",res,"\n\n\n"
     return json.dumps(res)
 
   # Boosts set of pages: crawler exploits outlinks for the given set of pages.
@@ -244,7 +241,6 @@ class Page(object):
   # False).
   @cherrypy.expose
   def setPagesTag(self, pages, tag, applyTagFlag, session):
-    print "\n\n\n SET PAGES TAG ",session, "\n\n\n"
     session = json.loads(session)
     pages = Page.extractListParam(pages)
     applyTagFlag = Page.extractBooleanParam(applyTagFlag)
