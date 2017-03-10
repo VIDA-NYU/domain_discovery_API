@@ -3,7 +3,7 @@
 # Type "make help" for a list of commands
 
 # Variables for the Makefile
-.PHONY = conda_environment cherrypy_config  word2vec_data clean
+.PHONY = conda_environment  word2vec_data clean
 SHELL := /bin/bash
 CONDA_ROOT := $(shell conda info --root)
 CONDA_ENV := $(CONDA_ROOT)/envs/dd_api
@@ -16,7 +16,7 @@ LINK_WORD2VEC_DATA_TARGET := ranking/D_cbow_pdw_8B.pkl
 # Makefile commands, see below for actual builds
 
 ## all              : set up DD API development environment
-all: conda_env downloader_app cherrypy_config link_word2vec_data get_react_data
+all: conda_env downloader_app link_word2vec_data get_react_data
 
 ## help             : show all commands.
 # Note the double '##' in the line above: this is what's matched to produce
@@ -29,9 +29,6 @@ conda_env: $(CONDA_ENV_TARGET)
 
 ## downloader_app   : Build the Java-based downloader application
 downloader_app: $(DOWNLOADER_APP_TARGET)
-
-## cherrypy_config  : Configure CherryPy (set absolute root environment)
-cherrypy_config: $(CHERRY_PY_CONFIG_TARGET)
 
 ## link_word2vec_data : Hardlink the word2vec data from the conda environment
 link_word2vec_data: $(LINK_WORD2VEC_DATA_TARGET)
