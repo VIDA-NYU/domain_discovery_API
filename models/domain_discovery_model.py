@@ -167,7 +167,7 @@ class DomainModel(object):
   def runSeedFinder(self, terms, session):
     es_info = self.esInfo(session['domainId']);
 
-    data_dir = environ["DDT_HOME"] + "/server/data/"
+    data_dir = environ["DD_API_HOME"] + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
 
     domainmodel_dir = data_domain + "/models/"
@@ -183,7 +183,7 @@ class DomainModel(object):
   def createModel(self, session, zip=True):
     es_info = self.esInfo(session['domainId']);
 
-    data_dir = environ["DDT_HOME"] + "/server/data/"
+    data_dir = environ["DD_API_HOME"] + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
     data_training = data_domain + "/training_data/"
     data_negative = data_domain + "/training_data/negative/"
@@ -1179,7 +1179,7 @@ class DomainModel(object):
     results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
     not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
 
-    chdir(environ['DDT_HOME']+'/server/seeds_generator')
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
 
     comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c forward"\
            " -u \"" + ",".join(not_crawled_urls) + "\"" + \
@@ -1204,7 +1204,7 @@ class DomainModel(object):
     results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
     not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
 
-    chdir(environ['DDT_HOME']+'/server/seeds_generator')
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
 
     comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c backward"\
            " -u \"" + ",".join(not_crawled_urls) + "\"" + \
@@ -1678,10 +1678,9 @@ class DomainModel(object):
   def queryWeb(self, terms, max_url_count = 100, session = None):
     # TODO(Yamuna): Issue query on the web: results are stored in elastic search, nothing returned
     # here.
-
     es_info = self.esInfo(session['domainId'])
 
-    chdir(environ['DDT_HOME']+'/server/seeds_generator')
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
 
     if(int(session['pagesCap']) <= max_url_count):
       top = int(session['pagesCap'])
@@ -1716,7 +1715,7 @@ class DomainModel(object):
 
   def callDownloadUrls(self, query, urls_str, es_info):
 
-    chdir(environ['DDT_HOME']+'/server/seeds_generator')
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
 
     # Download 100 urls at a time
     step =  100
