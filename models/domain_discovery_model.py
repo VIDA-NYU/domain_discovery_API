@@ -976,7 +976,6 @@ class DomainModel(object):
 
   def _getUnsureLabelPages(self, session):
     es_info = self.esInfo(session['domainId'])
-    print "\n\n\n GET UNSURE LABEL PAGES"
     unsure_label_hits = term_search("unsure_tag", "1", session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return unsure_label_hits
@@ -996,7 +995,6 @@ class DomainModel(object):
     return neg_label_hits
 
   def getPagesQuery(self, session):
-    print "\n\n\n", session,"\n\n\n"
     es_info = self.esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
@@ -1234,12 +1232,10 @@ class DomainModel(object):
   # Adds tag tow pages (if applyTagFlag is True) or removes tag from pages (if applyTagFlag is
   # False).
   def setPagesTag(self, pages, tag, applyTagFlag, session):
-    print "\n\n\nSET PAGES TAG ", pages," ",tag," ",applyTagFlag," ",session,"\n\n\n"
     es_info = self.esInfo(session['domainId'])
 
     entries = {}
     results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
-    print "\n\n\n",results,"\n\n\n"
     if applyTagFlag and len(results) > 0:
       print '\n\napplied tag ' + tag + ' to pages' + str(pages) + '\n\n'
 
