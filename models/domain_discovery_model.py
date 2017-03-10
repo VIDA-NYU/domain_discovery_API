@@ -1305,9 +1305,9 @@ class DomainModel(object):
 
       if (session['domainId'] in self._onlineClassifiers) and (not applyTagFlag) and (tag in ["Relevant", "Irrelevant"]):
         self._onlineClassifiers.pop(session['domainId'])
-      
+
     return "Completed Process."
-  
+
   # Adds tag to terms (if applyTagFlag is True) or removes tag from terms (if applyTagFlag is
   # False).
   def setTermsTag(self, terms, tag, applyTagFlag, session):
@@ -1536,7 +1536,7 @@ class DomainModel(object):
     es_info = self.esInfo(session['domainId'])
 
     #self.updateOnlineClassifier(session)
-    
+
     unsure = 0
     label_pos = 0
     label_neg = 0
@@ -1549,8 +1549,9 @@ class DomainModel(object):
                                       es_info['docType'],
                                       self._es)
 
-      unlabelled_docs = sample(unlabelled_docs, 500)
-      
+      if len(unlabelled_docs) >500:
+           unlabelled_docs = sample(unlabelled_docs, 500)
+
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0] for unlabelled_doc in unlabelled_docs]
 
       # Check if unlabeled data available
