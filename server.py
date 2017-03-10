@@ -113,7 +113,7 @@ class Page(object):
   @cherrypy.expose
   def queryWeb(self, terms, session):
     session = json.loads(session)
-    res = self._model.queryWeb(terms, session)
+    res = self._model.queryWeb(terms, session=session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
@@ -386,12 +386,15 @@ class Page(object):
                            )
 
 # if __name__ == "__main__":
-#   page = Page()
+#   from models import domain_discovery_model
+#   path = os.path.dirname(__file__)
+#   model = domain_discovery_model.DomainModel()
+#   page = Page(model, path)
 
 #   # CherryPy always starts with app.root when trying to map request URIs
 #   # to objects, so we need to mount a request handler root. A request
 #   # to "/" will be mapped to HelloWorld().index().
-#   app = cherrypy.quickstart(page, config=Page.getConfig())
+#   app = cherrypy.quickstart(page, config=Page.getConfig(path))
 #   cherrypy.config.update(page.config)
 #   #app = cherrypy.tree.mount(page, "/", page.config)
 
