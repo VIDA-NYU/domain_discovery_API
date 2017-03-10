@@ -1236,6 +1236,7 @@ class DomainModel(object):
 
     entries = {}
     results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
+
     if applyTagFlag and len(results) > 0:
       print '\n\napplied tag ' + tag + ' to pages' + str(pages) + '\n\n'
 
@@ -1301,9 +1302,9 @@ class DomainModel(object):
 
       if (session['domainId'] in self._onlineClassifiers) and (not applyTagFlag) and (tag in ["Relevant", "Irrelevant"]):
         self._onlineClassifiers.pop(session['domainId'])
-
+      
     return "Completed Process."
-
+  
   # Adds tag to terms (if applyTagFlag is True) or removes tag from terms (if applyTagFlag is
   # False).
   def setTermsTag(self, terms, tag, applyTagFlag, session):
@@ -1423,7 +1424,7 @@ class DomainModel(object):
                           es_info['docType'],
                           self._es)
 
-    pos_text = [pos_doc[es_info['mapping']['text']][0] for pos_doc in pos_docs]
+    pos_text = [pos_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for pos_doc in pos_docs]
     pos_ids = [pos_doc["id"] for pos_doc in pos_docs]
     pos_labels = [1 for i in range(0, len(pos_text))]
 
@@ -1449,7 +1450,7 @@ class DomainModel(object):
                           es_info['activeDomainIndex'],
                           es_info['docType'],
                           self._es)
-    neg_text = [neg_doc[es_info['mapping']['text']][0] for neg_doc in neg_docs]
+    neg_text = [neg_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for neg_doc in neg_docs]
     neg_ids = [neg_doc["id"] for neg_doc in neg_docs]
     neg_labels = [0 for i in range(0, len(neg_text))]
 
@@ -1478,7 +1479,7 @@ class DomainModel(object):
                                                es_info['activeDomainIndex'],
                                                es_info['docType'],
                                                self._es)
-        pos_trained_text = [pos_trained_doc[es_info['mapping']['text']][0] for pos_trained_doc in pos_trained_docs]
+        pos_trained_text = [pos_trained_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for pos_trained_doc in pos_trained_docs]
         pos_trained_labels = [1 for i in range(0, len(pos_trained_text))]
 
         neg_trained_docs = get_documents_by_id(trainedNegSamples,
@@ -1487,7 +1488,7 @@ class DomainModel(object):
                                                es_info['docType'],
                                                self._es)
 
-        neg_trained_text = [neg_trained_doc[es_info['mapping']['text']][0] for neg_trained_doc in neg_trained_docs]
+        neg_trained_text = [neg_trained_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for neg_trained_doc in neg_trained_docs]
         neg_trained_labels = [0 for i in range(0, len(neg_trained_text))]
         [calibrate_pos_data,_] = self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(pos_trained_text)
         [calibrate_neg_data,_] = self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(neg_trained_text)
@@ -1532,7 +1533,7 @@ class DomainModel(object):
     es_info = self.esInfo(session['domainId'])
 
     #self.updateOnlineClassifier(session)
-
+    
     unsure = 0
     label_pos = 0
     label_neg = 0
@@ -1545,10 +1546,9 @@ class DomainModel(object):
                                       es_info['docType'],
                                       self._es)
 
-      if len(unlabelled_docs) >500:
-           unlabelled_docs = sample(unlabelled_docs, 500)
-
-      unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0] for unlabelled_doc in unlabelled_docs]
+      unlabelled_docs = sample(unlabelled_docs, 500)
+      
+      unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
       # Check if unlabeled data available
       if len(unlabeled_text) > 0:
