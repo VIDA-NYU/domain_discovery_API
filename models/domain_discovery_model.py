@@ -1546,7 +1546,8 @@ class DomainModel(object):
                                       es_info['docType'],
                                       self._es)
 
-      unlabelled_docs = sample(unlabelled_docs, 500)
+      if len(unlabelled_docs) > 500:
+        unlabelled_docs = sample(unlabelled_docs, 500)
       
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
