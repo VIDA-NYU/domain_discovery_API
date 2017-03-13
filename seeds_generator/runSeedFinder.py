@@ -12,10 +12,10 @@ def collect_seed_urls(query, seed_dir, es_info):
     with open(seed_dir+"seeds_"+"+".join(query.split(" "))+".txt","r") as f:
         return [query, " ".join([url.strip() for url in f.readlines()]), es_info]
     
-def execSeedFinder(terms, es_info):
-    domain_name = es_info['activeCrawlerIndex']
+def execSeedFinder(terms, data_path, es_info):
+    domain_name = es_info['activeDomainIndex']
   
-    data_dir = environ["DDT_HOME"] + "/server/data/"
+    data_dir = data_path + "/server/data/"
     data_crawler  = data_dir + domain_name
     data_training = data_crawler + "/training_data/"
     
