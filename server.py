@@ -127,13 +127,13 @@ class Page(object):
 
   # Add crawler
   @cherrypy.expose
-  def addCrawler(self, index_name):
-    self._model.addCrawler(index_name)
+  def addDomain(self, index_name):
+    self._model.addDomain(index_name)
 
   # Delete crawler
   @cherrypy.expose
-  def delCrawler(self, domains):
-    self._model.delCrawler(json.loads(domains))
+  def delDomain(self, domains):
+    self._model.delDomain(json.loads(domains))
 
   # Create model
   @cherrypy.expose
