@@ -10,7 +10,10 @@ from os import environ
 import certifi
 
 if environ.get('ELASTICSEARCH_SERVER'):
+    use_ssl = False
     es_server = environ['ELASTICSEARCH_SERVER']
+    if "https" in es_server:
+        use_ssl=True
 else:
     es_server = 'http://localhost:9200/'
 
@@ -29,7 +32,10 @@ else:
     es_passwd = ""
 
 if es_user:
-    es = Elasticsearch([es_server], http_auth=(es_user, es_passwd), use_ssl=True, verify_certs=True, ca_certs=certifi.where(), timeout=100)
+    if use_ssl:
+        es = Elasticsearch([es_server], http_auth=(es_user, es_passwd), use_ssl=True, verify_certs=True, ca_certs=certifi.where(), timeout=100)
+    else:
+        es = Elasticsearch([es_server], http_auth=(es_user, es_passwd), timeout=100)
 else:
     es = Elasticsearch([es_server])
 
