@@ -37,7 +37,6 @@ from elastic.get_documents import (get_most_recent_documents, get_documents,
 from elastic.aggregations import get_significant_terms, get_unique_values
 from elastic.create_index import create_index, create_terms_index, create_config_index
 from elastic.load_config import load_config
-from elastic.create_index import create_config_index
 from elastic.delete_index import delete_index
 from elastic.config import es, es_doc_type, es_server
 from elastic.delete import delete
@@ -77,12 +76,16 @@ class DomainModel(object):
     self._domains = None
     self._onlineClassifiers = {}
     self._pos_tags = ['NN', 'NNS', 'NNP', 'NNPS', 'FW', 'JJ']
+    self._path = ""
 
 
     self.results_file = open("results.txt", "w")
 
     self.pool = Pool(max_workers=3)
 
+  def setPath(self, path):
+    self._path = path
+    
   def getAvailableProjectionAlgorithms(self):
     return [{'name': key} for key in self.projectionsAlg.keys()]
 
@@ -167,7 +170,7 @@ class DomainModel(object):
   def runSeedFinder(self, terms, session):
     es_info = self.esInfo(session['domainId']);
 
-    data_dir = environ["DD_API_HOME"] + "/data/"
+    data_dir = self._path + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
 
     domainmodel_dir = data_domain + "/models/"
@@ -176,14 +179,14 @@ class DomainModel(object):
       self.createModel(session, zip=False)
 
     # Execute SeedFinder in a new thread
-    p = self.pool.submit(execSeedFinder, terms, es_info)
+    p = self.pool.submit(execSeedFinder, terms, self._path, es_info)
 
     return self.seed_finder_done_callback(p)
 
   def createModel(self, session, zip=True):
     es_info = self.esInfo(session['domainId']);
 
-    data_dir = environ["DD_API_HOME"] + "/data/"
+    data_dir = self._path + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
     data_training = data_domain + "/training_data/"
     data_negative = data_domain + "/training_data/negative/"
