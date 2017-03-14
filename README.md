@@ -8,7 +8,7 @@ Building and deploying the Domain Discovery can be done using its Makefile to cr
 
 ### Local development
 
-First install conda, either through the Anaconda or miniconda installers provided by Continuum.  You will also need Git and a Java Development Kit.  These are system tools that are generally not provided by conda.
+First install conda, either through the Anaconda or miniconda installers provided by Continuum.  You will also need Git, a Java Development Kit and Maven.  These are system tools that are generally not provided by conda.
 
 Clone the DD API repository and enter it:
 
