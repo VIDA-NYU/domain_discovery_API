@@ -15,15 +15,16 @@ def collect_seed_urls(query, seed_dir, es_info):
 def execSeedFinder(terms, data_path, es_info):
     domain_name = es_info['activeDomainIndex']
   
-    data_dir = data_path + "/server/data/"
+    data_dir = data_path + "/data/"
     data_crawler  = data_dir + domain_name
     data_training = data_crawler + "/training_data/"
     
     crawlermodel_dir = data_crawler + "/models/"
-    
+
     if (not isdir(crawlermodel_dir)):
       return
 
+  
     seed_dir = data_crawler + "/seedFinder/"
     
     if (not isdir(seed_dir)):
@@ -31,7 +32,7 @@ def execSeedFinder(terms, data_path, es_info):
       makedirs(seed_dir)
     
     ache_home = environ['ACHE_HOME']
-    comm = ache_home + "/bin/ache run focusedCrawler.seedfinder.SeedFinder --initialQuery \"" +terms + "\" --modelPath " + crawlermodel_dir + " --seedsPath " + seed_dir + " --maxPages 2 --maxQueries 1"
+    comm = ache_home + "/bin/ache run focusedCrawler.seedfinder.SeedFinder --initialQuery \"" +terms + "\" --modelPath " + crawlermodel_dir + " --seedsPath " + seed_dir + " --maxPages 2 --maxQueries 10"
 
     f_devnull = open(devnull, 'w')
     p = Popen(comm, shell=True, stderr=PIPE, stdout=f_devnull)
