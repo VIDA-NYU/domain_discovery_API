@@ -45,7 +45,7 @@ from ranking import tfidf, rank, extract_terms, word2vec, get_bigrams_trigrams
 
 from online_classifier.online_classifier import OnlineClassifier
 
-from topik import read_input, tokenize, vectorize, run_model, visualize, TopikProject
+#from topik import read_input, tokenize, vectorize, run_model, visualize, TopikProject
 
 from concurrent.futures import ThreadPoolExecutor as Pool
 
@@ -168,6 +168,8 @@ class DomainModel(object):
 
   # Run ACHE SeedFinder to generate queries and corresponding seed urls
   def runSeedFinder(self, terms, session):
+    self.createModel(session, False)
+    
     es_info = self.esInfo(session['domainId']);
 
     data_dir = self._path + "/data/"
@@ -180,8 +182,8 @@ class DomainModel(object):
 
     # Execute SeedFinder in a new thread
     p = self.pool.submit(execSeedFinder, terms, self._path, es_info)
-
-    return self.seed_finder_done_callback(p)
+    p.add_done_callback(self.seed_finder_done_callback)
+    #return self.seed_finder_done_callback(p)
 
   def createModel(self, session, zip=True):
     es_info = self.esInfo(session['domainId']);
