@@ -53,6 +53,7 @@ import urllib2
 
 MAX_TEXT_LENGTH = 3000
 MAX_TERM_FREQ = 2
+MAX_LABEL_PAGES = 2000
 
 class DomainModel(object):
 
@@ -981,21 +982,21 @@ class DomainModel(object):
 
   def _getUnsureLabelPages(self, session):
     es_info = self.esInfo(session['domainId'])
-    unsure_label_hits = term_search("unsure_tag", "1", session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    unsure_label_hits = term_search("unsure_tag", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return unsure_label_hits
 
   def _getPosLabelPages(self, session):
     es_info = self.esInfo(session['domainId'])
 
-    pos_label_hits = term_search("label_pos", "1", session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    pos_label_hits = term_search("label_pos", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return pos_label_hits
 
   def _getNegLabelPages(self, session):
     es_info = self.esInfo(session['domainId'])
 
-    neg_label_hits = term_search("label_neg", "1", session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    neg_label_hits = term_search("label_neg", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return neg_label_hits
 
@@ -1551,8 +1552,8 @@ class DomainModel(object):
                                       es_info['docType'],
                                       self._es)
 
-      if len(unlabelled_docs) > 500:
-        unlabelled_docs = sample(unlabelled_docs, 500)
+      if len(unlabelled_docs) > 2000:
+        unlabelled_docs = sample(unlabelled_docs, 2000)
       
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
