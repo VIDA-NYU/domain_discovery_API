@@ -168,8 +168,6 @@ class DomainModel(object):
 
   # Run ACHE SeedFinder to generate queries and corresponding seed urls
   def runSeedFinder(self, terms, session):
-    self.createModel(session, False)
-    
     es_info = self.esInfo(session['domainId']);
 
     data_dir = self._path + "/data/"
@@ -177,7 +175,7 @@ class DomainModel(object):
 
     domainmodel_dir = data_domain + "/models/"
 
-    if (not isdir(domainmodel_dir)):
+    if (not isfile(domainmodel_dir+"pageclassifier.model")):
       self.createModel(session, zip=False)
 
     # Execute SeedFinder in a new thread
