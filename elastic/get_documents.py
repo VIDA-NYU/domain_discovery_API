@@ -127,7 +127,7 @@ def get_most_recent_documents(opt_maxNumberOfPages = 200, mapping=None, fields =
     if len(fields) > 0:
         query["fields"] = fields
 
-    res = es.search(body=query, index = es_index, doc_type = es_doc_type)
+    res = es.search(body=query, index = es_index, doc_type = es_doc_type,, request_timeout=600)
     hits = res['hits']['hits']
 
     results = []
