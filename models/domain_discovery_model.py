@@ -179,6 +179,8 @@ class DomainModel(object):
     if (not isfile(domainmodel_dir+"pageclassifier.model")):
       self.createModel(session, zip=False)
 
+    print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
+
     # Execute SeedFinder in a new thread
     p = self.pool.submit(execSeedFinder, terms, self._path, es_info)
     p.add_done_callback(self.seed_finder_done_callback)
