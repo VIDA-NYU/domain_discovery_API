@@ -10,10 +10,13 @@ from os.path import isfile, join, exists, isdir
 # Return the seed urls generated for the given query
 def collect_seed_urls(query, seed_dir, es_info):
     encoded_query = urllib.quote(query).replace("%5C","")
+    print "\n\n\n COLLECT SEED URLS ",encoded_query," ", seed_dir
+	
     with open(seed_dir+"seeds_"+"+".join(encoded_query.split("%20"))+".txt","r") as f:
         return [query, " ".join([url.strip() for url in f.readlines()]), es_info]
     
 def execSeedFinder(terms, data_path, es_info):
+    print "\n\n\n EXEC SEED FINDER", terms, " ", data_path, " "
     domain_name = es_info['activeDomainIndex']
   
     data_dir = data_path + "/data/"
@@ -35,10 +38,11 @@ def execSeedFinder(terms, data_path, es_info):
         
     ache_home = environ['ACHE_HOME']
 
-    comm = ache_home + "/bin/ache run focusedCrawler.seedfinder.SeedFinder --initialQuery \"" +terms + "\" --modelPath " + crawlermodel_dir + " --seedsPath " + seed_dir + " --maxPages 2 --maxQueries 10"
+    comm = ache_home + "/bin/ache run focusedCrawler.seedfinder.SeedFinder --initialQuery \"" +terms + "\" --modelPath " + crawlermodel_dir + " --seedsPath " + seed_dir + " --maxPages 2 --maxQueries 100"
     encoded_query = urllib.quote(terms).replace("%5C","")
     f_sf_log = open(seed_dir+"log/seeds_"+"+".join(encoded_query.split("%20"))+".log", 'w')
-    p = Popen(comm, shell=True, stderr=PIPE, stdout=f_sf_log)
+    f_sf_err_log = open(seed_dir+"log/seeds_"+"+".join(encoded_query.split("%20"))+"_error.log", 'w')
+    p = Popen(comm, shell=True, stderr=f_sf_err_log, stdout=f_sf_log)
     p.wait()
 
     return collect_seed_urls(terms, seed_dir, es_info)
