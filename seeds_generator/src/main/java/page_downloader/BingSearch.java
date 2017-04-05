@@ -17,6 +17,7 @@ import org.xml.sax.InputSource;
 import org.w3c.dom.*;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
+import org.json.JSONObject;
 
 public class BingSearch {
     
@@ -85,7 +86,13 @@ public class BingSearch {
 			NodeList nl = e.getChildNodes();
 			String url = Download_Utils.validate_url((nl.item(0).getNodeValue()));
 			results.add(url);
-			download.addTask(url);
+			JSONObject url_info = new JSONObject();
+			url_info.put("link",url);
+			url_info.put("snippet","");
+			url_info.put("title","");
+			
+			download.addTask(url_info);
+
 	    	}
 		if ((Integer.valueOf(top) - chunk) < 50) 
 			chunk = Integer.valueOf(top) - chunk;

@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.client.Client;
+import org.json.JSONObject;
 
 public class Download {
 
@@ -43,8 +44,8 @@ public class Download {
 	this.query = query;
     }
 
-    public void addTask(String url){
-	downloaderService.execute(new Download_URL(url.trim(), this.query, this.es_index, this.es_doc_type, this.client));
+    public void addTask(JSONObject url_info){
+	downloaderService.execute(new Download_URL(url_info, this.query, this.es_index, this.es_doc_type, this.client));
     }
 
     public void shutdown(){

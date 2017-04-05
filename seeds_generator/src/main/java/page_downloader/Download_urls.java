@@ -1,3 +1,5 @@
+import org.json.JSONObject;
+
 public class Download_urls {
     public Download_urls(){
     }
@@ -6,7 +8,12 @@ public class Download_urls {
 	Download download = new Download(query, es_index, es_doc_type, es_server);
 	
 	for(String url: urls){
-	    download.addTask(Download_Utils.validate_url(url));
+	    JSONObject url_info = new JSONObject();
+	    url_info.put("link",Download_Utils.validate_url(url));
+	    url_info.put("snippet","");
+	    url_info.put("title","");
+	    
+	    download.addTask(url_info);
 	}
 	
 	download.shutdown();
