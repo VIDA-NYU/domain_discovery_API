@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from dateutil import tz
 from sets import Set
+import json;
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -1708,10 +1709,25 @@ class DomainModel(object):
 
     p=Popen(comm, shell=True, stdout=PIPE)
     output, errors = p.communicate()
-    print output, " ", len(output)
     print errors
-    num_pages = self.getNumPagesDownloaded(output)
-    return {"pages":num_pages}
+    //num_pages = self.getNumPagesDownloaded(output)
+
+    data = json.loads(output);
+    urls = data["urls"]
+    titles = data["titles"]
+    snippets = data["snippets"]
+    
+    docs = {}
+    for i in range(0,len(urls)):
+      doc = {}
+      doc["snippet"] = snippets[i]
+      doc["image_url"] = ""
+      doc["title"] = titles[i]
+      doc["tags"] = []
+
+      docs[urls[i]] = doc
+
+    return docs
 
   def getNumPagesDownloaded(self, output):
     index = output.index("Number of results:")
