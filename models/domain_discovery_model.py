@@ -1709,8 +1709,8 @@ class DomainModel(object):
 
     p=Popen(comm, shell=True, stdout=PIPE)
     output, errors = p.communicate()
-    print errors
-    //num_pages = self.getNumPagesDownloaded(output)
+    #print errors
+    #num_pages = self.getNumPagesDownloaded(output)
 
     data = json.loads(output);
     urls = data["urls"]
@@ -1723,7 +1723,6 @@ class DomainModel(object):
       doc["snippet"] = snippets[i]
       doc["image_url"] = ""
       doc["title"] = titles[i]
-      doc["tags"] = []
 
       docs[urls[i]] = doc
 
