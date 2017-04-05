@@ -17,7 +17,7 @@ public class Download_urls {
 	}
 	
 	download.shutdown();
-	System.out.println("Number of results: " + urls.length);
+	//System.out.println("Number of results: " + urls.length);
 			    
     }
 
@@ -43,7 +43,7 @@ public class Download_urls {
 	    } else if(arg.equals("-q")){
 		query = args[++i];
 	    }else {
-		System.out.println("Unrecognized option");
+		System.err.println("Unrecognized option");
 		break;
 	    }
 	    ++i;

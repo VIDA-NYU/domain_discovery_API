@@ -49,14 +49,14 @@ public class Download {
     }
 
     public void shutdown(){
-	try {
+	//try {
 	    downloaderService.shutdown();
 	    //downloaderService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-	    downloaderService.awaitTermination(60 , TimeUnit.SECONDS);
+	    //downloaderService.awaitTermination(60 , TimeUnit.SECONDS);
 	    this.client.close();
-	} catch (InterruptedException e) {
-	    e.printStackTrace();
-	}
+	// } catch (InterruptedException e) {
+	//     e.printStackTrace();
+	// }
     }
 
     
