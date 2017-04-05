@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat;
 import java.net.URI;
 import java.net.URL;
 import java.net.MalformedURLException;
+import org.json.JSONObject;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -38,14 +39,18 @@ import org.elasticsearch.action.index.IndexResponse;
 
 public class Download_URL implements Runnable {
     String url = "";
+    String description = "";
+    String title = "";
     String query = "";
     String es_index = "memex";
     String es_doc_type = "page";
     String es_host = "";
     Client client = null;
 
-    public Download_URL(String url, String query, String es_index, String es_doc_type, Client client){
-	this.url = url;
+    public Download_URL(JSONObject url_info, String query, String es_index, String es_doc_type, Client client){
+	this.url = (String)url_info.get("link");
+	this.description = (String)url_info.get("snippet");
+	this.title = (String)url_info.get("title");
 	this.query = query;
 	this.client = client;
 	if(!es_index.isEmpty())
@@ -168,7 +173,9 @@ public class Download_URL implements Runnable {
 		    }
 
 		    String content_text = (String)extracted_content.get("content");
-		    String title = (String)extracted_content.get("title");
+
+		    if(title.isEmpty())
+			title = (String)extracted_content.get("title");
 
 		    SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
 		    date_format.setTimeZone(TimeZone.getTimeZone("UTC"));
@@ -185,7 +192,9 @@ public class Download_URL implements Runnable {
 			.execute()
 			.actionGet();
 
-		    String description = getDescription(responseBody, content_text);
+		    if(description.isEmpty())
+			description = getDescription(responseBody, content_text);
+
 		    String imageUrl = getImage(responseBody, url.toURL());
 		    //System.out.println("Image URL: " + imageUrl);
 
