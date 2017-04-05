@@ -135,7 +135,7 @@ public class Download_URL implements Runnable {
 	try{
 	    img_url = new URL(url, img_url).toString();
 	}catch (MalformedURLException e){
-	    System.out.println("MalformedURLException " + e.getMessage());
+	    System.err.println("MalformedURLException " + e.getMessage());
 	}
 
 	return img_url;
