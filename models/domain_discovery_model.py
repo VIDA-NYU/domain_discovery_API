@@ -86,7 +86,7 @@ class DomainModel(object):
 
   def setPath(self, path):
     self._path = path
-    
+
   def getAvailableProjectionAlgorithms(self):
     return [{'name': key} for key in self.projectionsAlg.keys()]
 
@@ -484,7 +484,7 @@ class DomainModel(object):
   #   ...
   # ]
   def getTermsSummaryDomain(self, opt_maxNumberOfTerms = 40, session = None):
-
+      
     es_info = self.esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
@@ -1308,9 +1308,9 @@ class DomainModel(object):
 
       if (session['domainId'] in self._onlineClassifiers) and (not applyTagFlag) and (tag in ["Relevant", "Irrelevant"]):
         self._onlineClassifiers.pop(session['domainId'])
-      
+
     return "Completed Process."
-  
+
   # Adds tag to terms (if applyTagFlag is True) or removes tag from terms (if applyTagFlag is
   # False).
   def setTermsTag(self, terms, tag, applyTagFlag, session):
@@ -1539,7 +1539,7 @@ class DomainModel(object):
     es_info = self.esInfo(session['domainId'])
 
     #self.updateOnlineClassifier(session)
-    
+
     unsure = 0
     label_pos = 0
     label_neg = 0
@@ -1554,7 +1554,7 @@ class DomainModel(object):
 
       if len(unlabelled_docs) > 2000:
         unlabelled_docs = sample(unlabelled_docs, 2000)
-      
+
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
       # Check if unlabeled data available

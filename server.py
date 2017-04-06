@@ -43,7 +43,7 @@ class Page(object):
   def extractListParam(param, opt_char = None):
     delimiter = opt_char if opt_char != None else '|'
     return param.split(delimiter) if len(param) > 0 else []
-  
+
   # Default constructor reading app config file.
   def __init__(self, model, path):
     # Folder with html content.
@@ -178,7 +178,7 @@ class Page(object):
   @cherrypy.expose
   def getTermsSummary(self, session):
     session = json.loads(session)
-    res = self._model.getTermsSummary(session)
+    res = self._model.getTermsSummaryDomain(session = session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
