@@ -38,10 +38,10 @@ public class GoogleSearch {
     } 
 
 	
-    public JSONObject search(String query, String top, String es_index, String es_doc_type, String es_server){
+    public JSONObject search(String query, String begin, String top, String es_index, String es_doc_type, String es_server){
 	//System.out.println("Query: " + query);
         int nTop = Integer.valueOf(top);
-	
+	int start = Integer.valueOf(begin);
 	if (this.prop == null){
 	    System.out.println("Error: config file is not loaded yet");
 	    return null;
@@ -57,9 +57,9 @@ public class GoogleSearch {
 	try {
 	    int step = 10; //10 is the maximum number of results to return in each query
 	    query = "&num=" + String.valueOf(step) + "&key=" + accountKey + "&cx=" + cseID + "&q=" + query.replaceAll(" ", "%20");
-	    for (int start = 1; start < nTop; start += step){
+	    for (; start < nTop; start += step){
 		query_url = new URL("https://www.googleapis.com/customsearch/v1?start=" + String.valueOf(start) + query);  
-		//System.out.println(query_url);
+		System.err.println("\n\n\n"+query_url+"\n\n\n");
 		    
 		HttpURLConnection conn = (HttpURLConnection)query_url.openConnection();
 		conn.setRequestMethod("GET");
@@ -112,6 +112,7 @@ public class GoogleSearch {
 	
 	String query = ""; //default
 	String top = "50"; //default
+	String start = "1"; //default
 	String es_index = "memex";
 	String es_doc_type = "page";
 	String es_server = "localhost";
@@ -123,6 +124,8 @@ public class GoogleSearch {
 		query = args[++i];
 	    } else if(arg.equals("-t")){ 
 		top = args[++i];
+	    } else if(arg.equals("-b")){ 
+		start = args[++i];
 	    } else if(arg.equals("-i")){
 		es_index = args[++i];
 	    } else if(arg.equals("-d")){
@@ -140,6 +143,6 @@ public class GoogleSearch {
 	//System.out.println("Get the top " + top + " results");
 	
 	GoogleSearch bs = new GoogleSearch();
-	bs.search(query, top, es_index, es_doc_type, es_server);
+	bs.search(query, start, top, es_index, es_doc_type, es_server);
     }
 }
