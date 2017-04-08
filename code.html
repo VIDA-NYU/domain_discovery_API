@@ -1,0 +1,135 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Auto Generated Documentation &#8212; dd_api 1.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true,
+        SOURCELINK_SUFFIX: '.txt'
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="domain_discovery_API" href="includeme.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-models.domain_discovery_model">
+<span id="auto-generated-documentation"></span><h1>Auto Generated Documentation<a class="headerlink" href="#module-models.domain_discovery_model" title="Permalink to this headline">¶</a></h1>
+<dl class="function">
+<dt id="models.domain_discovery_model.random">
+<code class="descclassname">models.domain_discovery_model.</code><code class="descname">random</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; x in the interval [0, 1).<a class="headerlink" href="#models.domain_discovery_model.random" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="models.domain_discovery_model.DomainModel">
+<em class="property">class </em><code class="descclassname">models.domain_discovery_model.</code><code class="descname">DomainModel</code><a class="reference internal" href="_modules/models/domain_discovery_model.html#DomainModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#models.domain_discovery_model.DomainModel" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="models.domain_discovery_model.DomainModel.make_topic_model">
+<code class="descname">make_topic_model</code><span class="sig-paren">(</span><em>session</em>, <em>tokenizer</em>, <em>vectorizer</em>, <em>model</em>, <em>ntopics</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/models/domain_discovery_model.html#DomainModel.make_topic_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#models.domain_discovery_model.DomainModel.make_topic_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Build topic model from the corpus of the supplied DDT domain.</p>
+<p>The topic model is represented as a topik.TopikProject object, and is
+persisted in disk, recording the model parameters and the location of the
+data. The output of the topic model itself is stored in Elasticsearch.</p>
+<dl class="docutils">
+<dt>domain: str</dt>
+<dd>DDT domain name as stored in Elasticsearch, so lowercase and with underscores in place of spaces.</dd>
+<dt>tokenizer: str</dt>
+<dd>A tokenizer from <code class="docutils literal"><span class="pre">topik.tokenizer.registered_tokenizers</span></code></dd>
+<dt>vectorizer: str</dt>
+<dd>A vectorization method from <code class="docutils literal"><span class="pre">topik.vectorizers.registered_vectorizers</span></code></dd>
+<dt>model: str</dt>
+<dd>A topic model from <code class="docutils literal"><span class="pre">topik.vectorizers.registered_models</span></code></dd>
+<dt>ntopics: int</dt>
+<dd>The number of topics to be used when modeling the corpus.</dd>
+</dl>
+<dl class="docutils">
+<dt>model: a topik topic model</dt>
+<dd>A topik model, encoding things like term frequencies, etc.</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="includeme.html" title="previous chapter">domain_discovery_API</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/code.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2017, Yamuna Krishnamurthy.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.5.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="_sources/code.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
