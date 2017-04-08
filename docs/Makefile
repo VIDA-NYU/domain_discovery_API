@@ -23,10 +23,7 @@ help:
 
 latexpdf:
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(PDFBUILDDIR)/latex
-	#                                          ^^^
 	@echo "Running LaTeX files through pdflatex..."
 	make -C $(PDFBUILDDIR)/latex all-pdf
-	#         ^^^
 	cp $(PDFBUILDDIR)/latex/*.pdf $(PDF)
-	#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 	@echo "pdflatex finished; see $(PDF)"
