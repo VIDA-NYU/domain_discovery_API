@@ -5,7 +5,7 @@
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
 SPHINXPROJ    = DomainDiscoveryAPI
-SOURCEDIR     = .
+SOURCEDIR     = source
 BUILDDIR      = ../../domain_discovery_API_docs
 PDFBUILDDIR   = /tmp
 PDF           = ../manual.pdf
