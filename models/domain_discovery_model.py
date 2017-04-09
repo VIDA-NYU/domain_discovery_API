@@ -95,13 +95,21 @@ class DomainModel(object):
   def getAvailablePageRetrievalCriteria(self):
     return [{'name': key} for key in self.pageRetrieval.keys()]
 
-  # Returns a list of available seed domains in the format:
-  # [
-  #   {'id': domainId, 'name': domainName, 'creation': epochInSecondsOfFirstDownloadedURL},
-  #   {'id': domainId, 'name': domainName, 'creation': epochInSecondsOfFirstDownloadedURL},
-  #   ...
-  # ]
   def getAvailableDomains(self):
+    """
+    List the domains as saved in elasticsearch.
+ 
+    Parameters:
+        None
+
+    Returns:
+       array: [
+           {'id': domainId, 'name': domainName, 'creation': epochInSecondsOfFirstDownloadedURL},
+           {'id': domainId, 'name': domainName, 'creation': epochInSecondsOfFirstDownloadedURL},
+           ...
+           ]
+
+    """
     # Initializes elastic search.
     self._es = es
 
@@ -111,10 +119,31 @@ class DomainModel(object):
     [{'id': k, 'name': d['domain_name'], 'creation': d['timestamp'], 'index': d['index'], 'doc_type': d['doc_type']} for k, d in self._domains.items()]
 
   def getAvailableQueries(self, session):
+    """ Return all queries for the selected domain.
+
+    Parameters:
+        session (json): Should contain the domainId
+
+    Returns:
+        json: {
+                  <query>: <number of pages for the query>
+              }
+    """
     es_info = self.esInfo(session['domainId'])
     return get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
 
   def getAvailableTags(self, session):
+    """ Return all tags for the selected domain.
+
+    Parameters:
+        session (json): Should contain the domainId
+
+    Returns:
+        json: {
+                  <tag>: <number of pages for the tag>
+              }
+    """
+
     es_info = self.esInfo(session['domainId'])
 
     tags_neutral = field_missing("tag", ["url"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
@@ -1857,23 +1886,21 @@ class DomainModel(object):
     persisted in disk, recording the model parameters and the location of the
     data. The output of the topic model itself is stored in Elasticsearch.
 
-    Parameters
-    ----------
-    domain: str
-        DDT domain name as stored in Elasticsearch, so lowercase and with underscores in place of spaces.
-    tokenizer: str
-        A tokenizer from ``topik.tokenizer.registered_tokenizers``
-    vectorizer: str
-        A vectorization method from ``topik.vectorizers.registered_vectorizers``
-    model: str
-        A topic model from ``topik.vectorizers.registered_models``
-    ntopics: int
-        The number of topics to be used when modeling the corpus.
+    Parameters:
 
-    Returns
-    -------
-    model: a topik topic model
-        A topik model, encoding things like term frequencies, etc.
+        domain (str): DDT domain name as stored in Elasticsearch, so lowercase and with underscores in place of spaces.
+
+        tokenizer (str): A tokenizer from ``topik.tokenizer.registered_tokenizers``
+
+        vectorizer (str): A vectorization method from ``topik.vectorizers.registered_vectorizers``
+
+        model (str): A topic model from ``topik.vectorizers.registered_models``
+
+        ntopics (int): The number of topics to be used when modeling the corpus.
+
+    Returns:
+    
+        model: topik model, encoding things like term frequencies, etc.
     """
     es_info = self.esInfo(session['domainId'])
     content_field = self._mapping['text']
