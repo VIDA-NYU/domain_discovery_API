@@ -38,13 +38,13 @@ public class GoogleSearch {
     } 
 
 	
-    public JSONObject search(String query, String begin, String top, String es_index, String es_doc_type, String es_server){
+    public void search(String query, String begin, String top, String es_index, String es_doc_type, String es_server){
 	//System.out.println("Query: " + query);
         int nTop = Integer.valueOf(top);
 	int start = Integer.valueOf(begin);
 	if (this.prop == null){
 	    System.out.println("Error: config file is not loaded yet");
-	    return null;
+	    return;
 	}
 
 	Download download = new Download(query, es_index, es_doc_type, es_server);
@@ -100,12 +100,13 @@ public class GoogleSearch {
 	}
 
 	download.shutdown();
-	JSONObject results  = new JSONObject();
-	results.put("urls",urls);
-	results.put("titles",titles);
-	results.put("snippets",snippets);
-	System.out.println(results);
-	return results;
+	// JSONObject results  = new JSONObject();
+	// results.put("urls",urls);
+	// results.put("titles",titles);
+	// results.put("snippets",snippets);
+	// System.out.println(results);
+	// return results;
+
     }
 
     public static void main(String[] args) {
