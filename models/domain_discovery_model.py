@@ -103,7 +103,6 @@ class DomainModel(object):
     Returns:
        array: [
            {'id': domainId, 'name': domainName, 'creation': epochInSecondsOfFirstDownloadedURL},
-           {'id': domainId, 'name': domainName, 'creation': epochInSecondsOfFirstDownloadedURL},
            ...
            ]
 
@@ -123,11 +122,10 @@ class DomainModel(object):
         session (json): Should contain the domainId
 
     Returns:
-        json: {
-                  <query>: <number of pages for the query>
-              }
+        json: {<query>: <number of pages for the query>}
+
     """
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
     return get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
 
   def getAvailableTags(self, session):
@@ -137,12 +135,11 @@ class DomainModel(object):
         session (json): Should contain the domainId
 
     Returns:
-        json: {
-                  <tag>: <number of pages for the tag>
-              }
+        json: {<tag>: <number of pages for the tag>}
+
     """
 
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     tags_neutral = field_missing("tag", ["url"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
     unique_tags = {"Neutral": len(tags_neutral)}
@@ -159,7 +156,7 @@ class DomainModel(object):
     return unique_tags
 
   def getAvailableModelTags(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     unsure_tags = self._getUnsureLabelPages(session)
     unique_tags = {"Unsure": len(unsure_tags)}
@@ -172,10 +169,10 @@ class DomainModel(object):
 
     return unique_tags
 
-  def encode(self, url):
+  def _encode(self, url):
     return urllib2.quote(url).replace("/", "%2F")
 
-  def esInfo(self, domainId):
+  def _esInfo(self, domainId):
     es_info = {
       "activeDomainIndex": self._domains[domainId]['index'],
       "docType": self._domains[domainId]['doc_type']
@@ -186,7 +183,7 @@ class DomainModel(object):
       es_info["mapping"] = self._mapping
     return es_info
 
-  def seed_finder_done_callback(self, future):
+  def _seed_finder_done_callback(self, future):
     if future.exception() is not None:
       print "\n\n\nSeed Finder Callback Exception ", future.exception(),"\n\n\n"
     else:
@@ -198,7 +195,18 @@ class DomainModel(object):
 
   # Run ACHE SeedFinder to generate queries and corresponding seed urls
   def runSeedFinder(self, terms, session):
-    es_info = self.esInfo(session['domainId']);
+    """ Execute the SeedFinder witht the specified terms. The details of the url results of the SeedFinder
+    are uploaded into elasticsearch.
+
+    Parameters:
+        terms (str): terms for the inital query
+
+        session (json): Should contain the domainId
+
+    Returns:
+        None
+    """
+    es_info = self._esInfo(session['domainId']);
 
     data_dir = self._path + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
@@ -212,11 +220,21 @@ class DomainModel(object):
 
     # Execute SeedFinder in a new thread
     p = self.pool.submit(execSeedFinder, terms, self._path, es_info)
-    p.add_done_callback(self.seed_finder_done_callback)
+    p.add_done_callback(self._seed_finder_done_callback)
     #return self.seed_finder_done_callback(p)
 
   def createModel(self, session, zip=True):
-    es_info = self.esInfo(session['domainId']);
+    """ Create an ACHE model to be applied to SeedFinder and focused crawler.
+    It saves the classifiers, features, the training data in the <project>/data/<domain> directory.
+    If zip=True all generated files and folders are zipped into a file.
+
+    Parameters:
+        session (json): should have domainId
+
+    Returns:
+        None
+    """
+    es_info = self._esInfo(session['domainId']);
 
     data_dir = self._path + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
@@ -283,7 +301,7 @@ class DomainModel(object):
     with open(seeds_file, 'w') as s:
       for url in pos_html:
         try:
-          file_positive = data_positive + self.encode(url.encode('utf8'))
+          file_positive = data_positive + self._encode(url.encode('utf8'))
           s.write(url.encode('utf8') + '\n')
           with open(file_positive, 'w') as f:
             f.write(pos_html[url])
@@ -299,7 +317,7 @@ class DomainModel(object):
 
     for url in neg_html:
       try:
-        file_negative = data_negative + self.encode(url.encode('utf8'))
+        file_negative = data_negative + self._encode(url.encode('utf8'))
         with open(file_negative, 'w') as f:
           f.write(neg_html[url])
       except IOError:
@@ -357,18 +375,28 @@ class DomainModel(object):
       return None
 
 
-  # Returns number of pages downloaded between ts1 and ts2 for active domain.
-  # ts1 and ts2 are Unix epochs (seconds after 1970).
-  # If opt_applyFilter is True, the summary returned corresponds to the applied pages filter defined
-  # previously in @applyFilter. Otherwise the returned summary corresponds to the entire dataset
-  # between ts1 and ts2.
-  # Returns dictionary in the format:
-  # {
-  #   'Positive': {'Explored': numExploredPages, 'Exploited': numExploitedPages},
-  #   'Negative': {'Explored': numExploredPages, 'Exploited': numExploitedPages},
-  # }
   def getPagesSummaryDomain(self, opt_ts1 = None, opt_ts2 = None, opt_applyFilter = False, session = None):
-    es_info = self.esInfo(session['domainId'])
+    """ Returns number of pages downloaded between opt_ts1 and opt_ts2 for active domain.  
+    If opt_applyFilter is True, the summary returned corresponds 
+    to the applied pages filter defined previously in @applyFilter. Otherwise the returned summary
+    corresponds to the entire dataset between ts1 and ts2.
+    
+    Parameters:
+        opt_ts1 (long): start time from when pages need to be returned. Unix epochs (seconds after 1970).
+      
+        opt_ts2 (long): start time from when pages need to be returned. Unix epochs (seconds after 1970).
+
+        opt_applyFiler (bool): Apply filtering to the pages
+
+        session (json): session information
+
+    Returns:
+        json: {
+            'Positive': {'Explored': explored, 'Exploited': exploited, 'Boosted': boosted},
+            'Negative': {'Explored': numExploredPages, 'Exploited': numExploitedPages},...
+        }
+    """ 
+    es_info = self._esInfo(session['domainId'])
 
     # If ts1 not specified, sets it to -Infinity.
     if opt_ts1 is None:
@@ -401,8 +429,6 @@ class DomainModel(object):
       'Negative': {'Explored': explored / 5, 'Exploited': exploited / 5, 'Boosted':  boosted / 5},
     }
 
-
-
   # Returns number of pages downloaded between ts1 and ts2 for active domain.
   # ts1 and ts2 are Unix epochs (seconds after 1970).
   # If opt_applyFilter is True, the summary returned corresponds to the applied pages filter defined
@@ -416,7 +442,7 @@ class DomainModel(object):
   # }
   def getPagesSummaryDomain(self, opt_ts1 = None, opt_ts2 = None, opt_applyFilter = False, session = None):
 
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     # If ts1 not specified, sets it to -Infinity.
     if opt_ts1 is None:
@@ -514,7 +540,7 @@ class DomainModel(object):
   # ]
   def getTermsSummaryDomain(self, opt_maxNumberOfTerms = 40, session = None):
       
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
     if not session['fromDate'] is None:
@@ -793,7 +819,7 @@ class DomainModel(object):
 
 
   def _getMostRecentPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     hits = []
     if session['fromDate'] is None:
@@ -820,7 +846,7 @@ class DomainModel(object):
     return hits
 
   def _getPagesForQueriesTags(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     s_fields = {}
     s_fields_aux = {}
@@ -884,7 +910,7 @@ class DomainModel(object):
 
 
   def _getPagesForQueries(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     s_fields = {}
     if not session['filter'] is None:
@@ -910,7 +936,7 @@ class DomainModel(object):
     return hits
 
   def _getPagesForTags(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     s_fields = {}
     if not session['filter'] is None:
@@ -977,14 +1003,14 @@ class DomainModel(object):
     return hits
 
   def _getRelevantPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     pos_hits = search(es_info['mapping']['tag'], ['relevant'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], 'page', self._es)
 
     return pos_hits
 
   def _getMoreLikePages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     hits=[]
     tags = session['selected_tags'].split(',')
@@ -1001,7 +1027,7 @@ class DomainModel(object):
     return hits
 
   def _getMoreLikePagesAll(self, session, tag_hits):
-      es_info = self.esInfo(session['domainId'])
+      es_info = self._esInfo(session['domainId'])
       if len(tag_hits) > 0:
           tag_urls = [field['id'] for field in tag_hits]
           results = get_more_like_this(tag_urls, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], session['pagesCap'],  es_info['activeDomainIndex'], es_info['docType'],  self._es)
@@ -1010,27 +1036,27 @@ class DomainModel(object):
       return aux_result
 
   def _getUnsureLabelPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
     unsure_label_hits = term_search("unsure_tag", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return unsure_label_hits
 
   def _getPosLabelPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     pos_label_hits = term_search("label_pos", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return pos_label_hits
 
   def _getNegLabelPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     neg_label_hits = term_search("label_neg", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return neg_label_hits
 
   def getPagesQuery(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
     if not session.get('fromDate') is None:
@@ -1066,7 +1092,7 @@ class DomainModel(object):
   #   {url1: {snippet, image_url, title, tags, retrieved}} (tags are a list, potentially empty)
   #
   def getPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
     if not session.get('fromDate') is None:
@@ -1104,7 +1130,7 @@ class DomainModel(object):
   #   ]
   # }
   def getPagesProjection(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
     if not session['fromDate'] is None:
@@ -1118,7 +1144,7 @@ class DomainModel(object):
     return self.generatePagesProjection(hits, session)
 
   def generatePagesProjection(self, hits, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     last_downloaded_url_epoch = None
     docs = []
@@ -1184,7 +1210,7 @@ class DomainModel(object):
 
   # Fetches snippets for a given term.
   def getTermSnippets(self, term, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     #tags = get_documents(term, 'term', ['tag'], es_info['activeDomainIndex'], 'terms', self._es)
 
@@ -1206,7 +1232,7 @@ class DomainModel(object):
   # Crawl forward
   def getForwardLinks(self, urls, session):
 
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     results = field_exists("crawled_forward", [es_info['mapping']['url'], "crawled_forward"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
     already_crawled = [result[es_info["mapping"]["url"]][0] for result in results if result["crawled_forward"][0] == 1]
@@ -1231,7 +1257,7 @@ class DomainModel(object):
   # Crawl backward
   def getBackwardLinks(self, urls, session):
 
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     results = field_exists("crawled_backward", [es_info['mapping']['url']], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
     already_crawled = [result[es_info["mapping"]["url"]][0] for result in results]
@@ -1267,7 +1293,7 @@ class DomainModel(object):
   # Adds tag tow pages (if applyTagFlag is True) or removes tag from pages (if applyTagFlag is
   # False).
   def setPagesTag(self, pages, tag, applyTagFlag, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     entries = {}
     results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
@@ -1346,7 +1372,7 @@ class DomainModel(object):
     # TODO(Yamuna): Apply tag to page and update in elastic search. Suggestion: concatenate tags
     # with semi colon, removing repetitions.
 
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     s_fields = {
       "term": "",
@@ -1417,7 +1443,7 @@ class DomainModel(object):
 
   # Update online classifer
   def updateOnlineClassifier(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     onlineClassifier = None
     trainedPosSamples = []
@@ -1565,7 +1591,7 @@ class DomainModel(object):
     # Label unlabelled data
 
     #TODO: Move this to Model tab functionality
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     #self.updateOnlineClassifier(session)
 
@@ -1652,7 +1678,7 @@ class DomainModel(object):
 
   # Delete terms from term window and from the ddt_terms index
   def deleteTerm(self,term, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
     delete([term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']], self._termsIndex, "terms", self._es)
 
   # Add domain
@@ -1685,7 +1711,7 @@ class DomainModel(object):
     delete_document(domains.keys(), "config", "domains", self._es)
 
   def updateColors(self, session, colors):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     entry = {
       session['domainId']: {
@@ -1713,7 +1739,7 @@ class DomainModel(object):
   def queryWeb(self, terms, max_url_count = 100, session = None):
     # TODO(Yamuna): Issue query on the web: results are stored in elastic search, nothing returned
     # here.
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     chdir(environ['DD_API_HOME']+'/seeds_generator')
 
@@ -1785,13 +1811,13 @@ class DomainModel(object):
 
   # Download the pages of uploaded urls
   def downloadUrls(self, urls_str, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     output = self.callDownloadUrls("uploaded", urls_str, es_info)
     return output
 
   def getPlottingData(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
     return get_plotting_data(self._all, es_info["activeDomainIndex"], es_info['docType'], self._es)
 
   # Projects pages.
@@ -1937,7 +1963,7 @@ class DomainModel(object):
     
         model: topik model, encoding things like term frequencies, etc.
     """
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
     content_field = self._mapping['text']
 
     def not_empty(doc): return bool(doc[content_field][0])  # True if document not empty
