@@ -374,8 +374,8 @@ class DomainModel(object):
     else:
       return None
 
-
   def getPagesSummaryDomain(self, opt_ts1 = None, opt_ts2 = None, opt_applyFilter = False, session = None):
+
     """ Returns number of pages downloaded between opt_ts1 and opt_ts2 for active domain.  
     If opt_applyFilter is True, the summary returned corresponds 
     to the applied pages filter defined previously in @applyFilter. Otherwise the returned summary
@@ -396,52 +396,6 @@ class DomainModel(object):
             'Negative': {'Explored': numExploredPages, 'Exploited': numExploitedPages},...
         }
     """ 
-    es_info = self._esInfo(session['domainId'])
-
-    # If ts1 not specified, sets it to -Infinity.
-    if opt_ts1 is None:
-      now = time.localtime(0)
-      opt_ts1 = int(time.mktime(now))
-    else:
-      opt_ts1 = int(opt_ts1)
-
-    # If ts2 not specified, sets it to now.
-    if opt_ts2 is None:
-      now = time.localtime()
-      opt_ts2 = int(time.mktime(now))
-    else:
-      opt_ts2 = int(opt_ts2)
-
-    # TODO(Yamuna): Query Elastic Search (schema self._activeDomainId) for number of downloaded pages
-    # between given Unix epochs.
-    # TODO(Yamuna): apply filter if it is None. Otherwise, match_all.
-    print '\n\n *** init', opt_ts1
-
-    inc = opt_ts2 - opt_ts1
-
-    print '\n\n *** delta', inc
-
-    explored = int(opt_ts1 / 10E6 + inc)
-    exploited = int(opt_ts1 / 10E8 + inc / 2)
-    boosted = int(opt_ts1 / 10E8 + inc / 2)
-    return { \
-      'Positive': {'Explored': explored, 'Exploited': exploited, 'Boosted': boosted},
-      'Negative': {'Explored': explored / 5, 'Exploited': exploited / 5, 'Boosted':  boosted / 5},
-    }
-
-  # Returns number of pages downloaded between ts1 and ts2 for active domain.
-  # ts1 and ts2 are Unix epochs (seconds after 1970).
-  # If opt_applyFilter is True, the summary returned corresponds to the applied pages filter defined
-  # previously in @applyFilter. Otherwise the returned summary corresponds to the entire dataset
-  # between ts1 and ts2.
-  # Returns dictionary in the format:
-  # {
-  #   'Relevant': numRelevantPages,
-  #   'Irrelevant': numIrrelevantPages,
-  #   'Neutral': numNeutralPages,
-  # }
-  def getPagesSummaryDomain(self, opt_ts1 = None, opt_ts2 = None, opt_applyFilter = False, session = None):
-
     es_info = self._esInfo(session['domainId'])
 
     # If ts1 not specified, sets it to -Infinity.
