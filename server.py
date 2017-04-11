@@ -114,8 +114,8 @@ class Page(object):
   def queryWeb(self, terms, session):
     session = json.loads(session)
     res = self._model.queryWeb(terms, session=session)
-    cherrypy.response.headers["Content-Type"] = "text/plain;"
-    return res
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(res)
 
   # Submits a query for a list of terms, e.g. 'ebola disease' to the seedfinder
   @cherrypy.expose
