@@ -28,12 +28,12 @@ public class Download {
 		es_host = parts[0];
 	    else if(parts.length == 3)
 		es_host = parts[1];
-	    
+
 	    es_host = es_host.replaceAll("/","");
 	}
 
 	this.client = new TransportClient().addTransportAddress(new InetSocketTransportAddress(es_host, 9300));
-	
+
 	if(!es_index.isEmpty())
 	    this.es_index = es_index;
 	if(!es_doc_type.isEmpty())
@@ -51,15 +51,19 @@ public class Download {
     public void shutdown(){
 	try {
 	    downloaderService.shutdown();
-	    this.client.close();
-	    while(!downloaderService.isTerminated())
+
+
 		//downloaderService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-		downloaderService.awaitTermination(60 , TimeUnit.SECONDS);
-	    
+		downloaderService.awaitTermination(120, TimeUnit.SECONDS);
+    if(downloaderService.isTerminated())
+      System.out.println("\n\n\n downloaderService terminated \n\n\n");
+    else System.out.println("\n\n\n downloaderService timedout \n\n\n");
+    this.client.close();
+
 	} catch (InterruptedException e) {
 	    e.printStackTrace();
 	}
     }
 
-    
+
 }
