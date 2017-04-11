@@ -1710,24 +1710,24 @@ class DomainModel(object):
       #          " -i " + es_info['activeDomainIndex'] + \
       #          " -d " + es_info['docType'] + \
       #          " -s " + es_server
-        
+
       #   p=Popen(comm, shell=True, stdout=PIPE)
       #   output, errors = p.communicate()
       #   #print errors
       #   #num_pages = self.getNumPagesDownloaded(output)
-        
+
       #   data = json.loads(output);
       #   urls = data["urls"]
       #   titles = data["titles"]
       #   snippets = data["snippets"]
-        
+
       #   docs = {}
       #   for i in range(0,len(urls)):
       #     doc = {}
       #     doc["snippet"] = snippets[i]
       #     doc["image_url"] = ""
       #     doc["title"] = titles[i]
-          
+
       #     docs[urls[i]] = doc
 
       #   print "\n\n\n QUERY WEB RESULTS ", docs, "\n\n\n"
@@ -1741,12 +1741,13 @@ class DomainModel(object):
              " -d " + es_info['docType'] + \
              " -s " + es_server
 
-      
+
     p=Popen(comm, shell=True, stdout=PIPE)
     output, errors = p.communicate()
-    #print errors
+    print output
     #num_pages = self.getNumPagesDownloaded(output)
 
+    print "\n\n\nQUERY WEB DONE\n\n\n"
     return "Done"
 
   def getNumPagesDownloaded(self, output):
