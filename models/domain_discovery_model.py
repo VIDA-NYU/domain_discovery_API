@@ -87,7 +87,7 @@ class DomainModel(object):
 
   def setPath(self, path):
     self._path = path
-    
+
   def getAvailableProjectionAlgorithms(self):
     return [{'name': key} for key in self.projectionsAlg.keys()]
 
@@ -171,7 +171,7 @@ class DomainModel(object):
   # Run ACHE SeedFinder to generate queries and corresponding seed urls
   def runSeedFinder(self, terms, session):
     self.createModel(session, False)
-    
+
     es_info = self.esInfo(session['domainId']);
 
     data_dir = self._path + "/data/"
@@ -1309,9 +1309,9 @@ class DomainModel(object):
 
       if (session['domainId'] in self._onlineClassifiers) and (not applyTagFlag) and (tag in ["Relevant", "Irrelevant"]):
         self._onlineClassifiers.pop(session['domainId'])
-      
+
     return "Completed Process."
-  
+
   # Adds tag to terms (if applyTagFlag is True) or removes tag from terms (if applyTagFlag is
   # False).
   def setTermsTag(self, terms, tag, applyTagFlag, session):
@@ -1540,7 +1540,7 @@ class DomainModel(object):
     es_info = self.esInfo(session['domainId'])
 
     #self.updateOnlineClassifier(session)
-    
+
     unsure = 0
     label_pos = 0
     label_neg = 0
@@ -1555,7 +1555,7 @@ class DomainModel(object):
 
       if len(unlabelled_docs) > 2000:
         unlabelled_docs = sample(unlabelled_docs, 2000)
-      
+
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
       # Check if unlabeled data available
@@ -1710,24 +1710,24 @@ class DomainModel(object):
       #          " -i " + es_info['activeDomainIndex'] + \
       #          " -d " + es_info['docType'] + \
       #          " -s " + es_server
-        
+
       #   p=Popen(comm, shell=True, stdout=PIPE)
       #   output, errors = p.communicate()
       #   #print errors
       #   #num_pages = self.getNumPagesDownloaded(output)
-        
+
       #   data = json.loads(output);
       #   urls = data["urls"]
       #   titles = data["titles"]
       #   snippets = data["snippets"]
-        
+
       #   docs = {}
       #   for i in range(0,len(urls)):
       #     doc = {}
       #     doc["snippet"] = snippets[i]
       #     doc["image_url"] = ""
       #     doc["title"] = titles[i]
-          
+
       #     docs[urls[i]] = doc
 
       #   print "\n\n\n QUERY WEB RESULTS ", docs, "\n\n\n"
@@ -1741,12 +1741,13 @@ class DomainModel(object):
              " -d " + es_info['docType'] + \
              " -s " + es_server
 
-      
+
     p=Popen(comm, shell=True, stdout=PIPE)
     output, errors = p.communicate()
-    #print errors
+    print output
     #num_pages = self.getNumPagesDownloaded(output)
 
+    print "\n\n\nQUERY WEB DONE\n\n\n"
     return "Done"
 
   def getNumPagesDownloaded(self, output):
