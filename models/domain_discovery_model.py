@@ -381,10 +381,8 @@ class DomainModel(object):
         session (json): session information
 
     Returns:
-        json: {
-            'Positive': {'Explored': explored, 'Exploited': exploited, 'Boosted': boosted},
-            'Negative': {'Explored': numExploredPages, 'Exploited': numExploitedPages},...
-        }
+        json: {'Positive': {'Explored': explored, 'Exploited': exploited, 'Boosted': boosted},
+               'Negative': {'Explored': numExploredPages, 'Exploited': numExploitedPages},...}
     """ 
     es_info = self._esInfo(session['domainId'])
 
@@ -407,7 +405,7 @@ class DomainModel(object):
                                       self._es)
     if opt_applyFilter and session['filter'] != "":
       #TODO(Sonia):results based in multi queries
-      results = self.getPagesQuery(session)
+      results = self._getPagesQuery(session)
 
       #results = get_most_recent_documents(session['pagesCap'], es_info['mapping'], ["url", es_info['mapping']["tag"]],
                                           #session['filter'], es_info['activeDomainIndex'], es_info['docType'],  \
@@ -475,14 +473,21 @@ class DomainModel(object):
       'TotalNeutral': total_neutral
     }
 
-  # Returns number of terms present in relevant and irrelevant pages.
-  # Returns array in the format:
-  # [
-  #   [term, frequencyInRelevantPages, frequencyInIrrelevantPages, tags],
-  #   [term, frequencyInRelevantPages, frequencyInIrrelevantPages, tags],
-  #   ...
-  # ]
-  def getTermsSummaryDomain(self, opt_maxNumberOfTerms = 40, session = None):
+  def extractTerms(self, opt_maxNumberOfTerms = 40, session = None):
+    """ Extract most relevant unigrams, bigrams and trigrams that summarize the pages.
+    These could provide unknown information about the domain. This in turn could 
+    suggest further queries for searching content.
+
+    Parameters:
+        opt_maxNumberOfTerms (int): Number of terms to return
+
+        session (json): should have domainId
+            
+    Returns:
+        array: [[term, frequencyInRelevantPages, frequencyInIrrelevantPages, tags], ...]
+    
+    """
+
     es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
@@ -503,7 +508,7 @@ class DomainModel(object):
     neg_terms = [field['term'][0] for field in multifield_term_search(s_fields, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)]
 
     # Get selected pages displayed in the MDS window
-    results = self.getPagesQuery(session)
+    results = self._getPagesQuery(session)
 
     top_terms = []
     top_bigrams = []
@@ -756,8 +761,7 @@ class DomainModel(object):
 
     return terms
 
-  # Sets limit to pages returned by @getPages.
-  def setPagesCountCap(self, pagesCap):
+  def _setPagesCountCap(self, pagesCap):
     self._pagesCap = int(pagesCap)
 
 
@@ -1000,7 +1004,7 @@ class DomainModel(object):
 
     return neg_label_hits
 
-  def getPagesQuery(self, session):
+  def _getPagesQuery(self, session):
     es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
@@ -1032,11 +1036,23 @@ class DomainModel(object):
 
     return hits
 
-  # Returns dictionary in the format:
-  #
-  #   {url1: {snippet, image_url, title, tags, retrieved}} (tags are a list, potentially empty)
-  #
   def getPages(self, session):
+    """ Find pages that satisfy the specified criteria. One or more of the following criteria are specified
+    in the session object as 'pageRetrievalCriteria':
+    
+    'Most Recent', 'More like', 'Queries', 'Tags', 'Model Tags', 'Maybe relevant', 'Maybe irrelevant', 'Unsure'
+    
+    
+    Parameters:
+        session (json): 
+
+            Should contain domainId, 'pageRetrievalCriteria'
+
+    Returns: 
+
+        json: {url1: {snippet, image_url, title, tags, retrieved}} (tags are a list, potentially empty)
+
+    """
     es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
@@ -1046,7 +1062,7 @@ class DomainModel(object):
     if not session.get('toDate') is None:
       session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
 
-    hits = self.getPagesQuery(session)
+    hits = self._getPagesQuery(session)
 
     docs = {}
     for hit in hits:
@@ -1068,17 +1084,19 @@ class DomainModel(object):
 
     return docs
 
-  # Returns most recent downloaded pages.
-  # Returns dictionary in the format:
-  # {
-  #   'last_downloaded_url_epoch': 1432310403 (in seconds)
-  #   'pages': [
-  #             [url1, x, y, tags, retrieved],     (tags are a list, potentially empty)
-  #             [url2, x, y, tags, retrieved],
-  #             [url3, x, y, tags, retrieved],
-  #   ]
-  # }
   def getPagesProjection(self, session):
+    """
+    Returns most recent downloaded pages.
+    Returns dictionary in the format:
+    {
+      'last_downloaded_url_epoch': 1432310403 (in seconds)
+      'pages': [
+                [url1, x, y, tags, retrieved],     (tags are a list, potentially empty)
+                [url2, x, y, tags, retrieved],
+                [url3, x, y, tags, retrieved],
+      ]
+    }
+    """
     es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
@@ -1088,7 +1106,7 @@ class DomainModel(object):
     if not session['toDate'] is None:
       session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
 
-    hits = self.getPagesQuery(session)
+    hits = self._getPagesQuery(session)
 
     return self.generatePagesProjection(hits, session)
 
