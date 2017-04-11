@@ -255,6 +255,8 @@ class Page(object):
   @cherrypy.expose
   def setTermsTag(self, terms, tag, applyTagFlag, session):
     session = json.loads(session)
+    terms = Page.extractListParam(terms)
+    applyTagFlag =  Page.extractBooleanParam(applyTagFlag)
     self._model.setTermsTag(terms, tag, applyTagFlag, session)
 
   # Update online classifier
