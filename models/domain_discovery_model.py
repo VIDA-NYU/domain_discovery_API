@@ -1701,39 +1701,6 @@ class DomainModel(object):
              " -i " + es_info['activeDomainIndex'] + \
              " -d " + es_info['docType'] + \
              " -s " + es_server
-      # step = 10
-      # start = 1
-      # for start in range (1, top+1, step):
-      #   comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -b " + str(start) + \
-      #          " -t " + str(start+step) + \
-      #          " -q \"" + terms + "\"" + \
-      #          " -i " + es_info['activeDomainIndex'] + \
-      #          " -d " + es_info['docType'] + \
-      #          " -s " + es_server
-
-      #   p=Popen(comm, shell=True, stdout=PIPE)
-      #   output, errors = p.communicate()
-      #   #print errors
-      #   #num_pages = self.getNumPagesDownloaded(output)
-
-      #   data = json.loads(output);
-      #   urls = data["urls"]
-      #   titles = data["titles"]
-      #   snippets = data["snippets"]
-
-      #   docs = {}
-      #   for i in range(0,len(urls)):
-      #     doc = {}
-      #     doc["snippet"] = snippets[i]
-      #     doc["image_url"] = ""
-      #     doc["title"] = titles[i]
-
-      #     docs[urls[i]] = doc
-
-      #   print "\n\n\n QUERY WEB RESULTS ", docs, "\n\n\n"
-      #   print json.dumps(docs)
-      #   yield json.dumps(docs)
-
     elif 'BING' in session['search_engine']:
       comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar BingSearch -t " + str(top) + \
              " -q \"" + terms + "\"" + \
@@ -1741,14 +1708,11 @@ class DomainModel(object):
              " -d " + es_info['docType'] + \
              " -s " + es_server
 
-
     p=Popen(comm, shell=True, stdout=PIPE)
     output, errors = p.communicate()
-    print output
-    #num_pages = self.getNumPagesDownloaded(output)
+    num_pages = self.getNumPagesDownloaded(output)
 
-    print "\n\n\nQUERY WEB DONE\n\n\n"
-    return "Done"
+    return {"pages":num_pages}
 
   def getNumPagesDownloaded(self, output):
     index = output.index("Number of results:")
@@ -1786,9 +1750,12 @@ class DomainModel(object):
 
       p=Popen(comm, shell=True, stdout=PIPE)
       output, errors = p.communicate()
-      print output
-      print errors
+      
+      print "\n\n\n", output, "\n\n\n"
+      print "\n\n\n", errors, "\n\n\n"
+      
       num_pages = num_pages + self.getNumPagesDownloaded(output)
+      
     return {"pages":num_pages}
 
   # Download the pages of uploaded urls
