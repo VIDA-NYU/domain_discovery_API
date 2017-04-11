@@ -157,7 +157,7 @@ public class Download_URL implements Runnable {
 	    response = httpclient.execute(request);
 
 	    int status = response.getStatusLine().getStatusCode();
-	    System.err.println("\n\n\nSTATUS OF HTTP REQUEST IN DOWNLOAD URL "+Integer.toString(status));
+
 	    if (status >= 200 && status < 300) {
 		HttpEntity entity = response.getEntity();
 		if(entity != null){
