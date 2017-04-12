@@ -51,19 +51,19 @@ public class Download {
     public void shutdown(){
 	try {
 	    downloaderService.shutdown();
-
-
-		//downloaderService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-		downloaderService.awaitTermination(120, TimeUnit.SECONDS);
-    if(downloaderService.isTerminated())
-      System.out.println("\n\n\n downloaderService terminated \n\n\n");
-    else System.out.println("\n\n\n downloaderService timedout \n\n\n");
-    this.client.close();
+	    //downloaderService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+	    downloaderService.awaitTermination(120, TimeUnit.SECONDS);
+	    if(downloaderService.isTerminated())
+		System.out.println("\n\n\n downloaderService terminated \n\n\n");
+	    else System.out.println("\n\n\n downloaderService timedout \n\n\n");
+	    this.client.close();
 
 	} catch (InterruptedException e) {
 	    e.printStackTrace();
 	}
     }
+
+
 
 
 }

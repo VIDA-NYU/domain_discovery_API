@@ -39,10 +39,8 @@ public class BingSearch {
 
 	
     public ArrayList<String> search(String query, String top, String es_index, String es_doc_type, String es_server){
-	System.out.println("Query: " + query);
-
 	if (this.prop == null){
-	    System.out.println("Error: config file is not loaded yet");
+	    System.err.println("Error: config file is not loaded yet");
 	    return null;
 	}
 
@@ -60,7 +58,6 @@ public class BingSearch {
 	    int skip_index = 0;
 	    while(chunk > 0){
 	    	query_url = new URL("https://api.datamarket.azure.com/Data.ashx/Bing/Search/v1/Web?Adult=%27Off%27&$skip=" + String.valueOf(skip_index*50) + "&Query=%27" + query + "%20filetype:html" + "%27&$top=" + String.valueOf(chunk));
-	    	System.out.println(query_url);
 
 	    	HttpURLConnection conn = (HttpURLConnection)query_url.openConnection();
 	    	conn.setRequestMethod("GET");
@@ -137,14 +134,11 @@ public class BingSearch {
 	    } else if(arg.equals("-s")){
 		es_server = args[++i];
 	    }else {
-		System.out.println("Unrecognized option");
+		System.err.println("Unrecognized option");
 		break;
 	    }
 	    ++i;
 	}
-	
-	System.out.println("Query = " + query);
-	System.out.println("Get the top " + top + " results");
 	
 	BingSearch bs = new BingSearch();
 	bs.search(query, top, es_index, es_doc_type, es_server);

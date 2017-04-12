@@ -170,8 +170,6 @@ class DomainModel(object):
 
   # Run ACHE SeedFinder to generate queries and corresponding seed urls
   def runSeedFinder(self, terms, session):
-    self.createModel(session, False)
-
     es_info = self.esInfo(session['domainId']);
 
     data_dir = self._path + "/data/"
@@ -179,8 +177,10 @@ class DomainModel(object):
 
     domainmodel_dir = data_domain + "/models/"
 
-    if (not isdir(domainmodel_dir)):
+    if (not isfile(domainmodel_dir+"pageclassifier.model")):
       self.createModel(session, zip=False)
+
+    print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
 
     # Execute SeedFinder in a new thread
     p = self.pool.submit(execSeedFinder, terms, self._path, es_info)
@@ -1744,11 +1744,10 @@ class DomainModel(object):
 
     p=Popen(comm, shell=True, stdout=PIPE)
     output, errors = p.communicate()
-    print output
-    #num_pages = self.getNumPagesDownloaded(output)
 
-    print "\n\n\nQUERY WEB DONE\n\n\n"
-    return "Done"
+    num_pages = self.getNumPagesDownloaded(output)
+
+    return {"pages":num_pages}
 
   def getNumPagesDownloaded(self, output):
     index = output.index("Number of results:")
@@ -1786,9 +1785,12 @@ class DomainModel(object):
 
       p=Popen(comm, shell=True, stdout=PIPE)
       output, errors = p.communicate()
-      print output
-      print errors
+
+      print "\n\n\n", output, "\n\n\n"
+      print "\n\n\n", errors, "\n\n\n"
+
       num_pages = num_pages + self.getNumPagesDownloaded(output)
+
     return {"pages":num_pages}
 
   # Download the pages of uploaded urls
