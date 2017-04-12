@@ -20,6 +20,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 
+import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -142,6 +143,9 @@ public class Download_URL implements Runnable {
     }
 
     public void run() {
+	long startTime = System.currentTimeMillis();
+	long elapsedTime = 0L;
+
 	//Do not process pdf files
 	if(this.url.contains(".pdf"))
 	    return;
@@ -273,5 +277,9 @@ public class Download_URL implements Runnable {
 		e.printStackTrace();
 	    }
         }
+
+	elapsedTime = (new Date()).getTime() - startTime;
+	System.err.println("\n\n\nTime Elapsed time for " + request.getURI() + " thread = "+String.valueOf(elapsedTime/1000)+" secs \n\n\n");
+	
     }
 }

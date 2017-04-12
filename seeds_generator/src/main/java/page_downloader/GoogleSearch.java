@@ -10,6 +10,7 @@ import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Date;
 import java.util.Properties;
 import java.util.ArrayList;
 import org.json.JSONObject;
@@ -57,6 +58,8 @@ public class GoogleSearch {
 	    int step = 10; //10 is the maximum number of results to return in each query
 	    query = "&num=" + String.valueOf(step) + "&key=" + accountKey + "&cx=" + cseID + "&q=" + query.replaceAll(" ", "%20");
 	    for (; start < nTop; start += step){
+		long startTime = System.currentTimeMillis();
+		long elapsedTime = 0L;
 		query_url = new URL("https://www.googleapis.com/customsearch/v1?start=" + String.valueOf(start) + query);  
 		    
 		HttpURLConnection conn = (HttpURLConnection)query_url.openConnection();
@@ -84,6 +87,8 @@ public class GoogleSearch {
 		    //All keys of the json object: snippet, htmlFormattedUrl, htmlTitle
 		    //kind, pagemap, displayLink, link, htmlSnippet, title, formatedUrl, cacheId 
 		}
+		elapsedTime = (new Date()).getTime() - startTime;
+		System.err.println("\n\n\nTime Elapsed for each Google search = "+String.valueOf(elapsedTime/1000)+" secs \n\n\n");
 	    }
 
 	} 
