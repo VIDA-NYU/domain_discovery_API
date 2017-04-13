@@ -1,5 +1,5 @@
-Auto Generated Documentation
-============================
+DD API Operations
+=================
 
 .. automodule:: models.domain_discovery_model
    :members:
