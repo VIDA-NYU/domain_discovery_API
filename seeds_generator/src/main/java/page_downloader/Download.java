@@ -52,12 +52,14 @@ public class Download {
 	try {
 	    downloaderService.shutdown();
 	    //downloaderService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-	    downloaderService.awaitTermination(120, TimeUnit.SECONDS);
+	    downloaderService.awaitTermination(10, TimeUnit.SECONDS);
 	    if(downloaderService.isTerminated())
 		System.out.println("\n\n\n downloaderService terminated \n\n\n");
-	    else System.out.println("\n\n\n downloaderService timedout \n\n\n");
-	    this.client.close();
-
+	    else {
+		System.out.println("\n\n\n downloaderService timedout \n\n\n");
+		this.client.close();
+		downloaderService.shutdownNow();
+	    }
 	} catch (InterruptedException e) {
 	    e.printStackTrace();
 	}
