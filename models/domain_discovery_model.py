@@ -1694,45 +1694,12 @@ class DomainModel(object):
     else:
       top = max_url_count
 
-
     if 'GOOG' in session['search_engine']:
       comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -t " + str(top) + \
              " -q \"" + terms + "\"" + \
              " -i " + es_info['activeDomainIndex'] + \
              " -d " + es_info['docType'] + \
              " -s " + es_server
-      # step = 10
-      # start = 1
-      # for start in range (1, top+1, step):
-      #   comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -b " + str(start) + \
-      #          " -t " + str(start+step) + \
-      #          " -q \"" + terms + "\"" + \
-      #          " -i " + es_info['activeDomainIndex'] + \
-      #          " -d " + es_info['docType'] + \
-      #          " -s " + es_server
-
-      #   p=Popen(comm, shell=True, stdout=PIPE)
-      #   output, errors = p.communicate()
-      #   #print errors
-      #   #num_pages = self.getNumPagesDownloaded(output)
-
-      #   data = json.loads(output);
-      #   urls = data["urls"]
-      #   titles = data["titles"]
-      #   snippets = data["snippets"]
-
-      #   docs = {}
-      #   for i in range(0,len(urls)):
-      #     doc = {}
-      #     doc["snippet"] = snippets[i]
-      #     doc["image_url"] = ""
-      #     doc["title"] = titles[i]
-
-      #     docs[urls[i]] = doc
-
-      #   print "\n\n\n QUERY WEB RESULTS ", docs, "\n\n\n"
-      #   print json.dumps(docs)
-      #   yield json.dumps(docs)
 
     elif 'BING' in session['search_engine']:
       comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar BingSearch -t " + str(top) + \
@@ -1744,6 +1711,8 @@ class DomainModel(object):
 
     p=Popen(comm, shell=True, stdout=PIPE)
     output, errors = p.communicate()
+    print output
+    print errors
 
     num_pages = self.getNumPagesDownloaded(output)
 
