@@ -189,5 +189,8 @@ autodoc_mock_imports = ['sklearn',
                         'ranking',
                         'tfidf_vector'
                         'online_classifier.online_classifier',
-                        'dateutil'
+                        'dateutil',
+                        'subprocess',
+                        'concurrent.futures',
+                        'urllib2'
 ]
