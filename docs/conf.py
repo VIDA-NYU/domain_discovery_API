@@ -188,5 +188,6 @@ autodoc_mock_imports = ['sklearn',
                         'elastic.delete',
                         'ranking',
                         'tfidf_vector'
-                        'online_classifier.online_classifier'
+                        'online_classifier.online_classifier',
+                        'dateutil'
 ]
