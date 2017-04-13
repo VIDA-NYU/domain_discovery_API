@@ -16,9 +16,12 @@ import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpUriRequest;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.apache.http.params.HttpParams;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.HttpConnectionParams;
+import org.apache.http.client.HttpClient;
 
 import java.util.Date;
 import java.util.regex.Matcher;
@@ -149,20 +152,25 @@ public class Download_URL implements Runnable {
 	//Do not process pdf files
 	if(this.url.contains(".pdf"))
 	    return;
-
-	CloseableHttpClient httpclient = HttpClients.createDefault();
+	
 	// Perform a GET request
 	HttpUriRequest request = new HttpGet(url);
 
-	System.err.println("Executing request " + request.getURI());
+	final HttpParams httpParams = new BasicHttpParams();
+
+	//Set httpget timeout to 10 milli secs so the connection is not indefinitely open
+	HttpConnectionParams.setConnectionTimeout(httpParams, 10000);
+	HttpClient  httpclient = new DefaultHttpClient(httpParams);
+
+	URI url = request.getURI();
+
+	System.err.println("Executing request " + url);
 
 	HttpResponse response = null;
 	try{
 	    response = httpclient.execute(request);
 
 	    int status = response.getStatusLine().getStatusCode();
-
-
 
 	    if (status >= 200 && status < 300) {
 		HttpEntity entity = response.getEntity();
@@ -172,7 +180,6 @@ public class Download_URL implements Runnable {
 
 		    String content_type = response.getFirstHeader("Content-Type").getValue();
 		    Integer content_length = (response.getFirstHeader("Content-Length") != null) ? Integer.valueOf(response.getFirstHeader("Content-Length").getValue()) : responseBody.length();
-		    //String date = response.getFirstHeader("Date").getValue();
 		    Map extracted_content = null;
 		    if(content_type.contains("text/html")){
 			Extract extract = new Extract();
@@ -184,11 +191,15 @@ public class Download_URL implements Runnable {
 		    if(title.isEmpty())
 			title = (String)extracted_content.get("title");
 
+		    if(description.isEmpty())
+			description = getDescription(responseBody, content_text);
+
+		    String imageUrl = getImage(responseBody, url.toURL());
+
 		    SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
 		    date_format.setTimeZone(TimeZone.getTimeZone("UTC"));
 		    String timestamp = date_format.format(new Date());
 
-		    URI url = request.getURI();
 		    SearchResponse searchResponse = null;
 		    searchResponse = client.prepareSearch(this.es_index)
 			.setTypes(this.es_doc_type)
@@ -198,12 +209,6 @@ public class Download_URL implements Runnable {
 			.setFrom(0).setExplain(true)
 			.execute()
 			.actionGet();
-
-		    if(description.isEmpty())
-			description = getDescription(responseBody, content_text);
-
-		    String imageUrl = getImage(responseBody, url.toURL());
-		    //System.out.println("Image URL: " + imageUrl);
 
 		    SearchHit[] hits = searchResponse.getHits().getHits();
 		    for (SearchHit hit : searchResponse.getHits()) {
@@ -260,7 +265,6 @@ public class Download_URL implements Runnable {
 		    }
 		}
 	    } else {
-		httpclient.close();
 		throw new ClientProtocolException("Unexpected response status: " + status);
 	    }
 	} catch (ClientProtocolException e1) {
@@ -272,16 +276,8 @@ public class Download_URL implements Runnable {
 	} catch (Exception e) {
 	    e.printStackTrace();
 	}
-	finally {
-	    try{
-		httpclient.close();
-	    } catch (IOException e){
-		e.printStackTrace();
-	    }
-        }
 
 	elapsedTime = (new Date()).getTime() - startTime;
-	System.err.println("\n\n\nTime Elapsed time for " + request.getURI() + " thread = "+String.valueOf(elapsedTime/1000)+" secs \n\n\n");
-
+	System.err.println("\n\n\nTime Elapsed time for " + url + " thread = "+String.valueOf(elapsedTime/1000.0)+" secs \n\n\n");
     }
 }
