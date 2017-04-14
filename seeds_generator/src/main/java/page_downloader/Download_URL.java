@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.URL;
 import java.net.MalformedURLException;
 import org.json.JSONObject;
+import org.json.JSONException;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -17,10 +18,14 @@ import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.util.EntityUtils;
 import org.apache.http.params.HttpParams;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
+//import org.apache.commons.httpclient.params.HttpConnectionParams;
 import org.apache.http.client.HttpClient;
 
 import java.util.Date;
@@ -46,15 +51,27 @@ public class Download_URL implements Runnable {
     String description = "";
     String title = "";
     String query = "";
+    Integer rank = 0;
     String es_index = "memex";
     String es_doc_type = "page";
     String es_host = "";
     Client client = null;
-
+    Integer timeout = 10; 
+	
     public Download_URL(JSONObject url_info, String query, String es_index, String es_doc_type, Client client){
-	this.url = (String)url_info.get("link");
-	this.description = (String)url_info.get("snippet");
-	this.title = (String)url_info.get("title");
+	try{
+	    this.url = (String)url_info.get("link");
+	}catch(JSONException e){
+	    e.printStackTrace();
+	}
+
+	if (url_info.has("snippet"))
+	    this.description = (String)url_info.get("snippet");
+	if (url_info.has("title"))
+	    this.title = (String)url_info.get("title");
+	if (url_info.has("rank"))
+	    this.rank = (Integer)url_info.get("rank");
+	
 	this.query = query;
 	this.client = client;
 	if(!es_index.isEmpty())
@@ -156,15 +173,16 @@ public class Download_URL implements Runnable {
 	// Perform a GET request
 	HttpUriRequest request = new HttpGet(url);
 
-	final HttpParams httpParams = new BasicHttpParams();
-
-	//Set httpget timeout to 10 milli secs so the connection is not indefinitely open
-	HttpConnectionParams.setConnectionTimeout(httpParams, 10000);
-	HttpClient  httpclient = new DefaultHttpClient(httpParams);
-
+	// Set timeout for http request
+	RequestConfig config = RequestConfig.custom()
+	    .setConnectTimeout(timeout * 1000)
+	    .setConnectionRequestTimeout(timeout * 1000)
+	    .setSocketTimeout(timeout * 1000).build();
+	
+	CloseableHttpClient httpclient = 
+	    HttpClientBuilder.create().setDefaultRequestConfig(config).build();
+	
 	URI url = request.getURI();
-
-	System.err.println("Executing request " + url);
 
 	HttpResponse response = null;
 	try{
@@ -227,6 +245,7 @@ public class Download_URL implements Runnable {
 				     .field("retrieved", timestamp)
 				     .field("image_url", new URI(imageUrl))
 				     .field("description", description)
+				     .field("rank", this.rank)
 				     .endObject());
 			    this.client.update(updateRequest).get();
 			} else{
@@ -240,6 +259,7 @@ public class Download_URL implements Runnable {
 				     .field("retrieved", timestamp)
 				     .field("image_url", new URI(imageUrl))
 				     .field("description", description)
+				     .field("rank", this.rank)
 				     .endObject());
 			    this.client.update(updateRequest).get();
 			}
@@ -258,6 +278,7 @@ public class Download_URL implements Runnable {
 				       .field("retrieved", timestamp)
 				       .field("image_url", new URI(imageUrl))
 				       .field("description", description)
+				       .field("rank", this.rank)
 				       .endObject()
 				       )
 			    .execute()
@@ -265,6 +286,7 @@ public class Download_URL implements Runnable {
 		    }
 		}
 	    } else {
+		httpclient.close();
 		throw new ClientProtocolException("Unexpected response status: " + status);
 	    }
 	} catch (ClientProtocolException e1) {
@@ -276,7 +298,14 @@ public class Download_URL implements Runnable {
 	} catch (Exception e) {
 	    e.printStackTrace();
 	}
-
+	finally {
+	    try{
+		httpclient.close();
+	    } catch (IOException e){
+		e.printStackTrace();
+	    }
+        }
+	
 	elapsedTime = (new Date()).getTime() - startTime;
 	System.err.println("\n\n\nTime Elapsed time for " + url + " thread = "+String.valueOf(elapsedTime/1000.0)+" secs \n\n\n");
     }
