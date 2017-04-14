@@ -1760,10 +1760,6 @@ class DomainModel(object):
       print "\n\n\n", output, "\n\n\n"
       print "\n\n\n", errors, "\n\n\n"
 
-      num_pages = num_pages + self.getNumPagesDownloaded(output)
-
-    return {"pages":num_pages}
-
   # Download the pages of uploaded urls
   def downloadUrls(self, urls_str, session):
     es_info = self.esInfo(session['domainId'])
