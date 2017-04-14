@@ -283,9 +283,9 @@ class Page(object):
   def downloadUrls(self, urls, session):
     urls = urls.replace("\n", " ")
     session = json.loads(session)
-    res = self._model.downloadUrls(urls, session)
+    self._model.downloadUrls(urls, session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
-    return json.dumps(res)
+    return json.dumps({"status": "Done"})
 
 
   # Extracts terms with current labels state.
