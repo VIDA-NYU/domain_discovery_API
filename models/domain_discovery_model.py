@@ -870,7 +870,7 @@ class DomainModel(object):
 
     for query in queries:
         s_fields[es_info['mapping']["query"]] = '"' + query + '"'
-        results= multifield_query_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+        results= multifield_query_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                 es_info['activeDomainIndex'],
                                 es_info['docType'],
                                 self._es)
@@ -1060,6 +1060,8 @@ class DomainModel(object):
         doc["title"] = hit['title'][0]
       if not hit.get(es_info['mapping']['tag']) is None:
         doc["tags"] = hit[es_info['mapping']['tag']]
+      if not hit.get("rank") is None:
+        doc["tags"] = hit["rank"]
 
       docs[hit['url'][0]] = doc
 
@@ -1711,8 +1713,8 @@ class DomainModel(object):
 
     p=Popen(comm, shell=True, stdout=PIPE)
     output, errors = p.communicate()
-    print output
-    print errors
+    print "\n\n\n QUERY WEB OUTPUT \n", "\n",output,"\n\n\n"
+    print "\n\n\n QUERY WEB ERRORS \n", errors,"\n\n\n"
 
     num_pages = self.getNumPagesDownloaded(output)
 
