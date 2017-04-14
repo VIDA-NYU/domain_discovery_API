@@ -52,8 +52,6 @@ public class GoogleSearch {
 	Download download = new Download(query, es_index, es_doc_type, es_server);
 
 	ArrayList<String> urls = new ArrayList<String>();
-	ArrayList<String> titles = new ArrayList<String>();
-	ArrayList<String> snippets = new ArrayList<String>();
 
 	URL query_url;
 	try {
@@ -81,20 +79,17 @@ public class GoogleSearch {
 
 		for(int i=0; i < items.length(); ++i){
 		    JSONObject item = items.getJSONObject(i);
-		    String link = (String)item.get("link");
-		    urls.add(link);
-
-		    titles.add((String)item.get("title"));
-		    snippets.add((String)item.get("snippet"));
-		    download.addTask(item);
-
 		    //All keys of the json object: snippet, htmlFormattedUrl, htmlTitle
 		    //kind, pagemap, displayLink, link, htmlSnippet, title, formatedUrl, cacheId
+
+		    String link = (String)item.get("link");
+		    urls.add(link);
+		    item.put("rank", Integer.toString(start + i));
+
+		    download.addTask(item);
 		}
 
 		elapsedTime = (new Date()).getTime() - startTime;
-		System.err.println("\n\n\nTime Elapsed for each Google search = "+String.valueOf(elapsedTime/1000)+" secs \n\n\n");
-
 	    }
 
 	}
@@ -150,8 +145,6 @@ public class GoogleSearch {
 	    }
 	    ++i;
 	}
-
-
 
 	GoogleSearch bs = new GoogleSearch();
 	bs.search(query, start, top, es_index, es_doc_type, es_server);
