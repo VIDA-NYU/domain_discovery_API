@@ -1,3 +1,5 @@
+import org.json.JSONObject;
+
 public class Download_urls {
     public Download_urls(){
     }
@@ -6,11 +8,13 @@ public class Download_urls {
 	Download download = new Download(query, es_index, es_doc_type, es_server);
 	
 	for(String url: urls){
-	    download.addTask(Download_Utils.validate_url(url));
+	    JSONObject url_info = new JSONObject();
+	    url_info.put("link",Download_Utils.validate_url(url));
+	    download.addTask(url_info);
 	}
 	
 	download.shutdown();
-	System.out.println("Number of results: " + urls.length);
+	//System.out.println("Number of results: " + urls.length);
 			    
     }
 
@@ -36,7 +40,7 @@ public class Download_urls {
 	    } else if(arg.equals("-q")){
 		query = args[++i];
 	    }else {
-		System.out.println("Unrecognized option");
+		System.err.println("Unrecognized option");
 		break;
 	    }
 	    ++i;

@@ -7,6 +7,8 @@ import java.text.SimpleDateFormat;
 import java.net.URI;
 import java.net.URL;
 import java.net.MalformedURLException;
+import org.json.JSONObject;
+import org.json.JSONException;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -15,10 +17,18 @@ import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.util.EntityUtils;
+import org.apache.http.params.HttpParams;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.HttpConnectionParams;
+//import org.apache.commons.httpclient.params.HttpConnectionParams;
+import org.apache.http.client.HttpClient;
 
+import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,14 +48,30 @@ import org.elasticsearch.action.index.IndexResponse;
 
 public class Download_URL implements Runnable {
     String url = "";
+    String description = "";
+    String title = "";
     String query = "";
+    Integer rank = 0;
     String es_index = "memex";
     String es_doc_type = "page";
     String es_host = "";
     Client client = null;
+    Integer timeout = 10; 
+	
+    public Download_URL(JSONObject url_info, String query, String es_index, String es_doc_type, Client client){
+	try{
+	    this.url = (String)url_info.get("link");
+	}catch(JSONException e){
+	    e.printStackTrace();
+	}
 
-    public Download_URL(String url, String query, String es_index, String es_doc_type, Client client){
-	this.url = url;
+	if (url_info.has("snippet"))
+	    this.description = (String)url_info.get("snippet");
+	if (url_info.has("title"))
+	    this.title = (String)url_info.get("title");
+	if (url_info.has("rank"))
+	    this.rank = (Integer)url_info.get("rank");
+	
 	this.query = query;
 	this.client = client;
 	if(!es_index.isEmpty())
@@ -130,28 +156,40 @@ public class Download_URL implements Runnable {
 	try{
 	    img_url = new URL(url, img_url).toString();
 	}catch (MalformedURLException e){
-	    System.out.println("MalformedURLException " + e.getMessage());
+	    System.err.println("MalformedURLException " + e.getMessage());
 	}
 
 	return img_url;
     }
 
     public void run() {
+	long startTime = System.currentTimeMillis();
+	long elapsedTime = 0L;
+
 	//Do not process pdf files
 	if(this.url.contains(".pdf"))
 	    return;
-
-	CloseableHttpClient httpclient = HttpClients.createDefault();
+	
 	// Perform a GET request
 	HttpUriRequest request = new HttpGet(url);
 
-	//System.out.println("Executing request " + request.getURI());
+	// Set timeout for http request
+	RequestConfig config = RequestConfig.custom()
+	    .setConnectTimeout(timeout * 1000)
+	    .setConnectionRequestTimeout(timeout * 1000)
+	    .setSocketTimeout(timeout * 1000).build();
+	
+	CloseableHttpClient httpclient = 
+	    HttpClientBuilder.create().setDefaultRequestConfig(config).build();
+	
+	URI url = request.getURI();
 
 	HttpResponse response = null;
 	try{
 	    response = httpclient.execute(request);
 
 	    int status = response.getStatusLine().getStatusCode();
+
 	    if (status >= 200 && status < 300) {
 		HttpEntity entity = response.getEntity();
 		if(entity != null){
@@ -160,7 +198,6 @@ public class Download_URL implements Runnable {
 
 		    String content_type = response.getFirstHeader("Content-Type").getValue();
 		    Integer content_length = (response.getFirstHeader("Content-Length") != null) ? Integer.valueOf(response.getFirstHeader("Content-Length").getValue()) : responseBody.length();
-		    //String date = response.getFirstHeader("Date").getValue();
 		    Map extracted_content = null;
 		    if(content_type.contains("text/html")){
 			Extract extract = new Extract();
@@ -168,13 +205,19 @@ public class Download_URL implements Runnable {
 		    }
 
 		    String content_text = (String)extracted_content.get("content");
-		    String title = (String)extracted_content.get("title");
+
+		    if(title.isEmpty())
+			title = (String)extracted_content.get("title");
+
+		    if(description.isEmpty())
+			description = getDescription(responseBody, content_text);
+
+		    String imageUrl = getImage(responseBody, url.toURL());
 
 		    SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
 		    date_format.setTimeZone(TimeZone.getTimeZone("UTC"));
 		    String timestamp = date_format.format(new Date());
 
-		    URI url = request.getURI();
 		    SearchResponse searchResponse = null;
 		    searchResponse = client.prepareSearch(this.es_index)
 			.setTypes(this.es_doc_type)
@@ -184,10 +227,6 @@ public class Download_URL implements Runnable {
 			.setFrom(0).setExplain(true)
 			.execute()
 			.actionGet();
-
-		    String description = getDescription(responseBody, content_text);
-		    String imageUrl = getImage(responseBody, url.toURL());
-		    //System.out.println("Image URL: " + imageUrl);
 
 		    SearchHit[] hits = searchResponse.getHits().getHits();
 		    for (SearchHit hit : searchResponse.getHits()) {
@@ -206,6 +245,7 @@ public class Download_URL implements Runnable {
 				     .field("retrieved", timestamp)
 				     .field("image_url", new URI(imageUrl))
 				     .field("description", description)
+				     .field("rank", this.rank)
 				     .endObject());
 			    this.client.update(updateRequest).get();
 			} else{
@@ -219,6 +259,7 @@ public class Download_URL implements Runnable {
 				     .field("retrieved", timestamp)
 				     .field("image_url", new URI(imageUrl))
 				     .field("description", description)
+				     .field("rank", this.rank)
 				     .endObject());
 			    this.client.update(updateRequest).get();
 			}
@@ -237,6 +278,7 @@ public class Download_URL implements Runnable {
 				       .field("retrieved", timestamp)
 				       .field("image_url", new URI(imageUrl))
 				       .field("description", description)
+				       .field("rank", this.rank)
 				       .endObject()
 				       )
 			    .execute()
@@ -263,5 +305,8 @@ public class Download_URL implements Runnable {
 		e.printStackTrace();
 	    }
         }
+	
+	elapsedTime = (new Date()).getTime() - startTime;
+	System.err.println("\n\n\nTime Elapsed time for " + url + " thread = "+String.valueOf(elapsedTime/1000.0)+" secs \n\n\n");
     }
 }
