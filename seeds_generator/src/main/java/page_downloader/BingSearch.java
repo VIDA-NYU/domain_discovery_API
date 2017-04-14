@@ -47,6 +47,7 @@ public class BingSearch {
 	Download download = new Download(query, es_index, es_doc_type, es_server);
 	
 	ArrayList<String> results = new ArrayList<String>();
+	
 	query = query.replaceAll(" ", "%20");
 	byte[] accountKeyBytes = Base64.encodeBase64((this.accountKey + ":" + this.accountKey).getBytes());
 	String accountKeyEnc = new String(accountKeyBytes);
@@ -85,9 +86,7 @@ public class BingSearch {
 			results.add(url);
 			JSONObject url_info = new JSONObject();
 			url_info.put("link",url);
-			url_info.put("snippet","");
-			url_info.put("title","");
-			
+			url_info.put("rank",(skip_index*50)+i);
 			download.addTask(url_info);
 
 	    	}
