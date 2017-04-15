@@ -869,16 +869,18 @@ class DomainModel(object):
     queries = session['selected_queries'].split(',')
 
     for query in queries:
-        s_fields[es_info['mapping']["query"]] = '"' + query + '"'
-        results= multifield_query_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                es_info['activeDomainIndex'],
-                                es_info['docType'],
-                                self._es)
-        if session['selected_morelike']=="moreLike":
-            aux_result = self._getMoreLikePagesAll(session, results)
-            hits.extend(aux_result)
-        else:
-            hits.extend(results)
+      s_fields[es_info['mapping']["query"]] = '"' + query + '"'
+      results= multifield_query_search(s_fields,
+                                       session['pagesCap'],
+                                       ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
+                                       es_info['activeDomainIndex'],
+                                       es_info['docType'],
+                                       self._es)
+      if session['selected_morelike']=="moreLike":
+        aux_result = self._getMoreLikePagesAll(session, results)
+        hits.extend(aux_result)
+      else:
+        hits.extend(results)
     return hits
 
   def _getPagesForTags(self, session):
@@ -1062,6 +1064,8 @@ class DomainModel(object):
         doc["tags"] = hit[es_info['mapping']['tag']]
       if not hit.get("rank") is None:
         doc["tags"] = hit["rank"]
+      if not hit.get(es_info['mapping']["timestamp"]) is None:
+        doc["timestamp"] = hit[es_info['mapping']["timestamp"]]
 
       docs[hit['url'][0]] = doc
 
