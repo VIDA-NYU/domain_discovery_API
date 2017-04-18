@@ -1,6 +1,7 @@
 import urllib2
 import sys
-from os import environ
+from os import environ, chdir
+from elastic.config import es_server
 
 from subprocess import Popen, PIPE, STDOUT
 
@@ -52,7 +53,46 @@ def download(inputfile, es_index = "memex", es_doc_type = "page", es_host="http:
   # if not (errors == None):
   #   print '*' * 80, '\n\n\n'  
   #   print errors
+
+def callDownloadUrls(query, subquery, urls_str, es_info):
+
+  chdir(environ['DD_API_HOME']+'/seeds_generator')
   
+  # Download 100 urls at a time
+  step =  100
+  urls = urls_str.split(" ")
+  url_size = 0
+  num_pages = 0
+  if len(urls) >= step:
+    for url_size in range(0, len(urls), step):
+      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar Download_urls -q \"" + query + "\" -u \"" + " ".join(urls[url_size:url_size + step]) + "\"" \
+             " -i " + es_info['activeDomainIndex'] + \
+             " -d " + es_info['docType'] + \
+             " -s " + es_server
+      
+      if subquery is not None:
+        comm = comm + " -sq \"" + subquery + "\""
+      
+      p=Popen(comm, shell=True, stdout=PIPE)
+      output, errors = p.communicate()
+      print output
+      print errors
+      
+  if len(urls[url_size:]) < step:
+    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar Download_urls -q \"" + query + "\" -u \"" + " ".join(urls[url_size:]) + "\"" \
+           " -i " + es_info['activeDomainIndex'] + \
+           " -d " + es_info['docType'] + \
+           " -s " + es_server
+    
+    if subquery is not None:
+      comm = comm + " -sq \"" + subquery + "\""
+
+    p=Popen(comm, shell=True, stdout=PIPE)
+    output, errors = p.communicate()
+    
+    print "\n\n\n", output, "\n\n\n"
+    print "\n\n\n", errors, "\n\n\n"
+
 def main(argv):
   if len(argv) != 1:
     print "Invalid arguments"

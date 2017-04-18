@@ -44,7 +44,7 @@ public class BingSearch {
 	    return null;
 	}
 
-	Download download = new Download(query, es_index, es_doc_type, es_server);
+	Download download = new Download(query, null, es_index, es_doc_type, es_server);
 	
 	ArrayList<String> results = new ArrayList<String>();
 	
