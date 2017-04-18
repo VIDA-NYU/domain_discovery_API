@@ -35,6 +35,7 @@ import java.util.regex.Pattern;
 import org.apache.commons.codec.binary.Base64;
 
 import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.action.search.SearchResponse;
@@ -51,14 +52,15 @@ public class Download_URL implements Runnable {
     String description = "";
     String title = "";
     String query = "";
-    Integer rank = 0;
+    String subquery = null;    
+    String rank = "0";
     String es_index = "memex";
     String es_doc_type = "page";
     String es_host = "";
     Client client = null;
     Integer timeout = 10; 
 	
-    public Download_URL(JSONObject url_info, String query, String es_index, String es_doc_type, Client client){
+    public Download_URL(JSONObject url_info, String query, String subquery, String es_index, String es_doc_type, Client client){
 	try{
 	    this.url = (String)url_info.get("link");
 	}catch(JSONException e){
@@ -70,9 +72,10 @@ public class Download_URL implements Runnable {
 	if (url_info.has("title"))
 	    this.title = (String)url_info.get("title");
 	if (url_info.has("rank"))
-	    this.rank = (Integer)url_info.get("rank");
+	    this.rank = (String)url_info.get("rank");
 	
 	this.query = query;
+	this.subquery = subquery;	
 	this.client = client;
 	if(!es_index.isEmpty())
 	    this.es_index = es_index;
@@ -204,86 +207,76 @@ public class Download_URL implements Runnable {
 			extracted_content = extract.process(responseBody);
 		    }
 
-		    String content_text = (String)extracted_content.get("content");
+		    if (extracted_content != null) {
+			String content_text = (String)extracted_content.get("content");
 
-		    if(title.isEmpty())
-			title = (String)extracted_content.get("title");
+			if(title.isEmpty())
+			    title = (String)extracted_content.get("title");
 
-		    if(description.isEmpty())
-			description = getDescription(responseBody, content_text);
+			if(description.isEmpty())
+			    description = getDescription(responseBody, content_text);
 
-		    String imageUrl = getImage(responseBody, url.toURL());
+			String imageUrl = getImage(responseBody, url.toURL());
 
-		    SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
-		    date_format.setTimeZone(TimeZone.getTimeZone("UTC"));
-		    String timestamp = date_format.format(new Date());
+			SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+			date_format.setTimeZone(TimeZone.getTimeZone("UTC"));
+			String timestamp = date_format.format(new Date());
 
-		    SearchResponse searchResponse = null;
-		    searchResponse = client.prepareSearch(this.es_index)
-			.setTypes(this.es_doc_type)
-			.setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
-			.setFetchSource(new String[]{"query"}, null)
-			.setQuery(QueryBuilders.termQuery("url", url))
-			.setFrom(0).setExplain(true)
-			.execute()
-			.actionGet();
-
-		    SearchHit[] hits = searchResponse.getHits().getHits();
-		    for (SearchHit hit : searchResponse.getHits()) {
-			Map map = hit.getSource();
-			ArrayList query_list = (ArrayList)map.get("query");
-			if(!query_list.contains(this.query)){
-			    query_list.add(this.query);
-			    UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, hit.getId())
-				.doc(XContentFactory.jsonBuilder()
-				     .startObject()
-				     .field("html", responseBody)
-				     .field("text", content_text)
-				     .field("title", title)
-				     .field("length", content_length)
-				     .field("query", query_list)
-				     .field("retrieved", timestamp)
-				     .field("image_url", new URI(imageUrl))
-				     .field("description", description)
-				     .field("rank", this.rank)
-				     .endObject());
-			    this.client.update(updateRequest).get();
-			} else{
-			    UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, hit.getId())
-				.doc(XContentFactory.jsonBuilder()
-				     .startObject()
-				     .field("html", responseBody)
-				     .field("text", content_text)
-				     .field("title", title)
-				     .field("length", content_length)
-				     .field("retrieved", timestamp)
-				     .field("image_url", new URI(imageUrl))
-				     .field("description", description)
-				     .field("rank", this.rank)
-				     .endObject());
-			    this.client.update(updateRequest).get();
-			}
-		    }
-
-		    if(hits.length == 0){
-			IndexResponse indexresponse = this.client.prepareIndex(this.es_index, this.es_doc_type)
-			    .setSource(XContentFactory.jsonBuilder()
-				       .startObject()
-				       .field("url", request.getURI())
-				       .field("html", responseBody)
-				       .field("text", content_text)
-				       .field("title", title)
-				       .field("length", content_length)
-				       .field("query", new String[]{this.query})
-				       .field("retrieved", timestamp)
-				       .field("image_url", new URI(imageUrl))
-				       .field("description", description)
-				       .field("rank", this.rank)
-				       .endObject()
-				       )
+			SearchResponse searchResponse = null;
+			searchResponse = client.prepareSearch(this.es_index)
+			    .setTypes(this.es_doc_type)
+			    .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+			    .setFetchSource(new String[]{"query", "subquery"}, null)
+			    .setQuery(QueryBuilders.termQuery("url", url))
+			    .setFrom(0).setExplain(true)
 			    .execute()
 			    .actionGet();
+
+			// Construct the object to be updated for the url
+			XContentBuilder jobj = XContentFactory.jsonBuilder().startObject();
+			jobj.field("html", responseBody)
+			    .field("text", content_text)
+			    .field("title", title)
+			    .field("length", content_length)
+			    .field("retrieved", timestamp)
+			    .field("image_url", new URI(imageUrl))
+			    .field("description", description)
+			    .field("rank", this.rank);
+
+			SearchHit[] hits = searchResponse.getHits().getHits();
+			for (SearchHit hit : searchResponse.getHits()) {
+			    Map map = hit.getSource();
+			    ArrayList query_list = (ArrayList)map.get("query");
+			    ArrayList subquery_list = (ArrayList)map.get("subquery");
+			    if(!query_list.contains(this.query)){
+				query_list.add(this.query);
+				jobj.field("query", query_list);
+			    }
+			
+			    if(this.subquery != null && subquery_list != null && !subquery_list.contains(this.subquery)){
+				jobj.field("subquery", subquery_list);
+			    }
+
+			    UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, hit.getId()).doc(jobj.endObject());
+			    this.client.update(updateRequest).get();
+			}
+
+			if(hits.length == 0){
+			    jobj.field("url", url);
+			    
+			    jobj.field("query", new String[]{this.query});
+
+			    if(this.subquery != null)
+				jobj.field("subquery", new String[]{this.subquery});				     				       
+
+			    IndexResponse indexresponse = this.client.prepareIndex(this.es_index, this.es_doc_type)
+				.setSource(jobj.endObject())
+				.execute()
+				.actionGet();
+			}
 		    }
+		} else {
+		    httpclient.close();
 		}
 	    } else {
 		httpclient.close();

@@ -4,8 +4,8 @@ public class Download_urls {
     public Download_urls(){
     }
     
-    public void download(String[] urls, String query, String es_index, String es_doc_type, String es_server){
-	Download download = new Download(query, es_index, es_doc_type, es_server);
+    public void download(String[] urls, String query, String subquery, String es_index, String es_doc_type, String es_server){
+	Download download = new Download(query, subquery, es_index, es_doc_type, es_server);
 	
 	for(String url: urls){
 	    JSONObject url_info = new JSONObject();
@@ -25,6 +25,7 @@ public class Download_urls {
 	String es_doc_type = "page";
 	String es_server = "localhost";
 	String query = "uploaded";
+	String subquery = null;
 	
 	int i = 0;
 	while (i < args.length){
@@ -39,6 +40,8 @@ public class Download_urls {
 		es_server = args[++i];
 	    } else if(arg.equals("-q")){
 		query = args[++i];
+	    } else if(arg.equals("-sq")){
+		subquery = args[++i];
 	    }else {
 		System.err.println("Unrecognized option");
 		break;
@@ -51,6 +54,6 @@ public class Download_urls {
 	    urls = urls_str.split(" ");
 		
 	Download_urls download_urls = new Download_urls();
-	download_urls.download(urls, query, es_index, es_doc_type, es_server);
+	download_urls.download(urls, query, subquery, es_index, es_doc_type, es_server);
     }
 }

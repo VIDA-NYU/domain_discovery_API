@@ -54,7 +54,7 @@ public class CrawlerInterface implements Runnable{
 	this.client = client;
 	this.crawlType = crawl_type;
 	this.top = top;
-	this.download = new Download("Crawl_" + this.es_index, this.es_index, this.es_doc_type, this.es_host);
+	this.download = new Download("Crawl_" + this.es_index, null, this.es_index, this.es_doc_type, this.es_host);
     }
 
     public ArrayList<String> crawl_backward(ArrayList<String> urls){
