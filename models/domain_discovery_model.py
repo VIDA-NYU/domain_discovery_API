@@ -85,6 +85,20 @@ class DomainModel(object):
 
     self.pool = Pool(max_workers=3)
     self.seedfinder = RunSeedFinder()
+
+  def _encode(self, url):
+    return urllib2.quote(url).replace("/", "%2F")
+
+  def _esInfo(self, domainId):
+    es_info = {
+      "activeDomainIndex": self._domains[domainId]['index'],
+      "docType": self._domains[domainId]['doc_type']
+    }
+    if not self._domains[domainId].get("mapping") is None:
+      es_info["mapping"] = self._domains[domainId]["mapping"]
+    else:
+      es_info["mapping"] = self._mapping
+    return es_info
     
   def setPath(self, path):
     self._path = path
@@ -170,48 +184,6 @@ class DomainModel(object):
     unique_tags["Maybe irrelevant"] = len(irrelevant_tags)
 
     return unique_tags
-
-  def _encode(self, url):
-    return urllib2.quote(url).replace("/", "%2F")
-
-  def _esInfo(self, domainId):
-    es_info = {
-      "activeDomainIndex": self._domains[domainId]['index'],
-      "docType": self._domains[domainId]['doc_type']
-    }
-    if not self._domains[domainId].get("mapping") is None:
-      es_info["mapping"] = self._domains[domainId]["mapping"]
-    else:
-      es_info["mapping"] = self._mapping
-    return es_info
-
-  # Run ACHE SeedFinder to generate queries and corresponding seed urls
-  def runSeedFinder(self, terms, session):
-    """ Execute the SeedFinder witht the specified terms. The details of the url results of the SeedFinder
-    are uploaded into elasticsearch.
-
-    Parameters:
-        terms (str): terms for the inital query
-
-        session (json): Should contain the domainId
-
-    Returns:
-        None
-    """
-    es_info = self._esInfo(session['domainId']);
-
-    data_dir = self._path + "/data/"
-    data_domain  = data_dir + es_info['activeDomainIndex']
-
-    domainmodel_dir = data_domain + "/models/"
-
-    if (not isfile(domainmodel_dir+"pageclassifier.model")):
-      self.createModel(session, zip=False)
-
-    print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
-
-    # Execute SeedFinder in a new thread
-    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, es_info)
 
   def createModel(self, session, zip=True):
     """ Create an ACHE model to be applied to SeedFinder and focused crawler.
@@ -1737,8 +1709,8 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
 
     output = callDownloadUrls("uploaded", None, urls_str, es_info)
-    return output
 
+    return output
 
   def getForwardLinks(self, urls, session):
     """ The content can be extended by crawling the given pages one level forward. The assumption here is that a relevant page will contain links to other relevant pages.
@@ -1806,7 +1778,34 @@ class DomainModel(object):
     output, errors = p.communicate()
     print output
     print errors
-  
+
+  def runSeedFinder(self, terms, session):
+    """ Execute the SeedFinder witht the specified terms. The details of the url results of the SeedFinder
+    are uploaded into elasticsearch.
+
+    Parameters:
+        terms (str): terms for the inital query
+
+        session (json): Should contain the domainId
+
+    Returns:
+        None
+    """
+    es_info = self._esInfo(session['domainId']);
+
+    data_dir = self._path + "/data/"
+    data_domain  = data_dir + es_info['activeDomainIndex']
+
+    domainmodel_dir = data_domain + "/models/"
+
+    if (not isfile(domainmodel_dir+"pageclassifier.model")):
+      self.createModel(session, zip=False)
+
+    print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
+
+    # Execute SeedFinder in a new thread
+    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, es_info)
+
   def getPlottingData(self, session):
     es_info = self._esInfo(session['domainId'])
     return get_plotting_data(self._all, es_info["activeDomainIndex"], es_info['docType'], self._es)
