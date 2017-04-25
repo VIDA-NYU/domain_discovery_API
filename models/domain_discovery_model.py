@@ -1042,14 +1042,12 @@ class DomainModel(object):
     
     'Most Recent', 'More like', 'Queries', 'Tags', 'Model Tags', 'Maybe relevant', 'Maybe irrelevant', 'Unsure'
     
+    and filter by keywords specified in the session object as 'filter'
     
     Parameters:
-        session (json): 
-
-            Should contain domainId, 'pageRetrievalCriteria'
+        session (json): Should contain 'domainId','pageRetrievalCriteria' or 'filter'
 
     Returns: 
-
         json: {url1: {snippet, image_url, title, tags, retrieved}} (tags are a list, potentially empty)
 
     """
@@ -1085,16 +1083,19 @@ class DomainModel(object):
     return docs
 
   def getPagesProjection(self, session):
-    """
-    Returns most recent downloaded pages.
-    Returns dictionary in the format:
-    {
-      'last_downloaded_url_epoch': 1432310403 (in seconds)
-      'pages': [
-                [url1, x, y, tags, retrieved],     (tags are a list, potentially empty)
-                [url2, x, y, tags, retrieved],
+    """ Organize content by some criteria such as relevance, similarity or category which allows to easily analyze groups of pages. The 'x','y' co-ordinates returned project the page in 2D maintaining clustering based on the projection chosen. The projection criteria is specified in the session object
+
+    Parameters:
+        session: Should Contain 'domainId' \
+                 Should contain 'activeProjectionAlg' which takes values 'tsne', 'pca' or 'kmeans' currently
+
+    Returns dictionary in the format:{ \
+      'last_downloaded_url_epoch': 1432310403 (in seconds) \
+      'pages': [ \
+                [url1, x, y, tags, retrieved],     (tags are a list, potentially empty) \
+                [url2, x, y, tags, retrieved], \
                 [url3, x, y, tags, retrieved],
-      ]
+      ]\
     }
     """
     es_info = self._esInfo(session['domainId'])
@@ -1108,9 +1109,9 @@ class DomainModel(object):
 
     hits = self._getPagesQuery(session)
 
-    return self.generatePagesProjection(hits, session)
+    return self._generatePagesProjection(hits, session)
 
-  def generatePagesProjection(self, hits, session):
+  def _generatePagesProjection(self, hits, session):
     es_info = self._esInfo(session['domainId'])
 
     last_downloaded_url_epoch = None
@@ -1196,55 +1197,6 @@ class DomainModel(object):
 
     return {'term': term, 'tags': tag, 'context': get_context(term.split('_'), es_info['mapping']['text'], es_info['activeDomainIndex'], es_info['docType'],  self._es)}
 
-  # Crawl forward
-  def getForwardLinks(self, urls, session):
-
-    es_info = self._esInfo(session['domainId'])
-
-    results = field_exists("crawled_forward", [es_info['mapping']['url'], "crawled_forward"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
-    already_crawled = [result[es_info["mapping"]["url"]][0] for result in results if result["crawled_forward"][0] == 1]
-    not_crawled = list(Set(urls).difference(already_crawled))
-    results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
-    not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
-
-    chdir(environ['DD_API_HOME']+'/seeds_generator')
-
-    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c forward"\
-           " -u \"" + ",".join(not_crawled_urls) + "\"" + \
-           " -t " + session["pagesCap"] + \
-           " -i " + es_info['activeDomainIndex'] + \
-           " -d " + es_info['docType'] + \
-           " -s " + es_server
-
-    p=Popen(comm, shell=True, stderr=PIPE)
-    output, errors = p.communicate()
-    print output
-    print errors
-
-  # Crawl backward
-  def getBackwardLinks(self, urls, session):
-
-    es_info = self._esInfo(session['domainId'])
-
-    results = field_exists("crawled_backward", [es_info['mapping']['url']], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
-    already_crawled = [result[es_info["mapping"]["url"]][0] for result in results]
-    not_crawled = list(Set(urls).difference(already_crawled))
-    results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
-    not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
-
-    chdir(environ['DD_API_HOME']+'/seeds_generator')
-
-    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c backward"\
-           " -u \"" + ",".join(not_crawled_urls) + "\"" + \
-           " -t " + session["pagesCap"] + \
-           " -i " + es_info['activeDomainIndex'] + \
-           " -d " + es_info['docType'] + \
-           " -s " + es_server
-
-    p=Popen(comm, shell=True, stderr=PIPE)
-    output, errors = p.communicate()
-    print output
-    print errors
 
   def _removeClassifierSample(self, domainId, sampleId):
     if self._onlineClassifiers.get(domainId) != None:
@@ -1257,9 +1209,19 @@ class DomainModel(object):
       except ValueError:
         pass
 
-  # Adds tag tow pages (if applyTagFlag is True) or removes tag from pages (if applyTagFlag is
-  # False).
   def setPagesTag(self, pages, tag, applyTagFlag, session):
+    """ Tag the pages with the given tag which can be a custom tag or 'Relevant'/'Irrelevant' which indicate relevance or irrelevance to the domain of interest. Tags help in clustering and categorizing the pages. They also help build computational models of the domain.
+
+    Parameters:
+        pages (urls): list of urls to apply tag
+        tag (string): custom tag, 'Relevant', 'Irrelevant'
+        applyTagFlag (bool): True - Add tag, False - Remove tag
+        session (json): Should contain domainId
+
+    Returns: 
+       Returns string "Completed Process"
+    
+    """
     es_info = self._esInfo(session['domainId'])
 
     entries = {}
@@ -1338,7 +1300,18 @@ class DomainModel(object):
   def setTermsTag(self, terms, tag, applyTagFlag, session):
     # TODO(Yamuna): Apply tag to page and update in elastic search. Suggestion: concatenate tags
     # with semi colon, removing repetitions.
+    """ Tag the terms as 'Positive'/'Negative' which indicate relevance or irrelevance to the domain of interest. Tags help in reranking terms to show the ones relevan to the domain.
+    
+    Parameters:
+        terms (string): list of terms to apply tag
+        tag (string): 'Positive' or 'Negative'
+        applyTagFlag (bool): True - Add tag, False - Remove tag
+        session (json): Should contain domainId
 
+    Returns: 
+        None
+    
+    """
     es_info = self._esInfo(session['domainId'])
 
     s_fields = {
@@ -1702,10 +1675,18 @@ class DomainModel(object):
 
     return colors
 
-  # Submits a web query for a list of terms, e.g. 'ebola disease'
   def queryWeb(self, terms, max_url_count = 100, session = None):
-    # TODO(Yamuna): Issue query on the web: results are stored in elastic search, nothing returned
-    # here.
+    """ Issue query on the web: results are stored in elastic search, nothing returned here.
+    
+    Parameters:
+        terms (string): Search query string
+        max_url_count (int): Number of pages to query. Maximum allowed = 100
+        session (json): should have domainId
+    
+    Returns:
+        None
+
+    """
     es_info = self._esInfo(session['domainId'])
 
     chdir(environ['DD_API_HOME']+'/seeds_generator')
@@ -1735,23 +1716,134 @@ class DomainModel(object):
     print "\n\n\n QUERY WEB OUTPUT \n", "\n",output,"\n\n\n"
     print "\n\n\n QUERY WEB ERRORS \n", errors,"\n\n\n"
 
-    num_pages = self.getNumPagesDownloaded(output)
+    num_pages = self._getNumPagesDownloaded(output)
 
     return {"pages":num_pages}
 
-  def getNumPagesDownloaded(self, output):
+  def _getNumPagesDownloaded(self, output):
     index = output.index("Number of results:")
     n_pages = output[index:]
     n = int(n_pages.split(":")[1])
     return n
 
-  # Download the pages of uploaded urls
-  def downloadUrls(self, urls_str, session):
+  def uploadUrls(self, urls_str, session):
+    """ Download pages corresponding to already known set of domain URLs
+    
+    Parameters:
+        urls_str (string): Space separated list of URLs
+        session (json): should have domainId
+    
+    Returns:
+        number of pages downloaded (int)
+
+    """
     es_info = self._esInfo(session['domainId'])
 
-    output = callDownloadUrls("uploaded", None, urls_str, es_info)
+    output = self._callUploadUrls("uploaded", urls_str, es_info)
     return output
 
+  def _callUploadUrls(self, query, urls_str, es_info):
+
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
+
+    # Download 100 urls at a time
+    step =  100
+    urls = urls_str.split(" ")
+    url_size = 0
+    num_pages = 0
+    if len(urls) >= step:
+      for url_size in range(0, len(urls), step):
+        comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar Download_urls -q \"" + query + "\" -u \"" + " ".join(urls[url_size:url_size + step]) + "\"" \
+               " -i " + es_info['activeDomainIndex'] + \
+               " -d " + es_info['docType'] + \
+               " -s " + es_server
+
+        p=Popen(comm, shell=True, stdout=PIPE)
+        output, errors = p.communicate()
+        print output
+        print errors
+        num_pages = num_pages + self.getNumPagesDownloaded(output)
+
+    if len(urls[url_size:]) < step:
+      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar Download_urls -q \"" + query + "\" -u \"" + " ".join(urls[url_size:]) + "\"" \
+           " -i " + es_info['activeDomainIndex'] + \
+           " -d " + es_info['docType'] + \
+           " -s " + es_server
+
+      p=Popen(comm, shell=True, stdout=PIPE)
+      output, errors = p.communicate()
+      print output
+      print errors
+      num_pages = num_pages + self.getNumPagesDownloaded(output)
+    return {"pages":num_pages}
+
+  def getForwardLinks(self, urls, session):
+    """ The content can be extended by crawling the given pages one level forward. The assumption here is that a relevant page will contain links to other relevant pages.
+    
+    Parameters:
+        urls (list): list of urls to crawl forward
+        session (json): should have domainId
+
+    Return:
+        None (Results are downloaded into elasticsearch)
+    """
+    es_info = self._esInfo(session['domainId'])
+
+    results = field_exists("crawled_forward", [es_info['mapping']['url'], "crawled_forward"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    already_crawled = [result[es_info["mapping"]["url"]][0] for result in results if result["crawled_forward"][0] == 1]
+    not_crawled = list(Set(urls).difference(already_crawled))
+    results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
+
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
+
+    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c forward"\
+           " -u \"" + ",".join(not_crawled_urls) + "\"" + \
+           " -t " + session["pagesCap"] + \
+           " -i " + es_info['activeDomainIndex'] + \
+           " -d " + es_info['docType'] + \
+           " -s " + es_server
+
+    p=Popen(comm, shell=True, stderr=PIPE)
+    output, errors = p.communicate()
+    print output
+    print errors
+
+  # Crawl backward
+  def getBackwardLinks(self, urls, session):
+    """ The content can be extended by crawling the given pages one level back to the pages that link to them. The assumption here is that a page containing the link to the given relevant page will contain links to other relevant pages.
+
+    Parameters:
+        urls (list): list of urls to crawl backward
+        session (json): should have domainId
+
+    Return:
+        None (Results are downloaded into elasticsearch)
+
+    """
+
+    es_info = self._esInfo(session['domainId'])
+
+    results = field_exists("crawled_backward", [es_info['mapping']['url']], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    already_crawled = [result[es_info["mapping"]["url"]][0] for result in results]
+    not_crawled = list(Set(urls).difference(already_crawled))
+    results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
+
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
+
+    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c backward"\
+           " -u \"" + ",".join(not_crawled_urls) + "\"" + \
+           " -t " + session["pagesCap"] + \
+           " -i " + es_info['activeDomainIndex'] + \
+           " -d " + es_info['docType'] + \
+           " -s " + es_server
+
+    p=Popen(comm, shell=True, stderr=PIPE)
+    output, errors = p.communicate()
+    print output
+    print errors
+  
   def getPlottingData(self, session):
     es_info = self._esInfo(session['domainId'])
     return get_plotting_data(self._all, es_info["activeDomainIndex"], es_info['docType'], self._es)
