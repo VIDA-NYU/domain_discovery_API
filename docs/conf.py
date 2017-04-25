@@ -192,5 +192,9 @@ autodoc_mock_imports = ['sklearn',
                         'dateutil',
                         'subprocess',
                         'concurrent.futures',
-                        'urllib2'
+                        'urllib2',
+                        'random'
 ]
+
+autodoc_member_order = 'bysource'
+

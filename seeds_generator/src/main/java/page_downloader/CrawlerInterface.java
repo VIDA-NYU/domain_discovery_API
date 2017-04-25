@@ -14,6 +14,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
 import org.xml.sax.InputSource;
 import org.w3c.dom.*;
+import org.json.JSONObject;
 
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.client.transport.TransportClient;
@@ -53,7 +54,7 @@ public class CrawlerInterface implements Runnable{
 	this.client = client;
 	this.crawlType = crawl_type;
 	this.top = top;
-	this.download = new Download("Crawl_" + this.es_index, this.es_index, this.es_doc_type, this.es_host);
+	this.download = new Download("Crawl_" + this.es_index, null, this.es_index, this.es_doc_type, this.es_host);
     }
 
     public ArrayList<String> crawl_backward(ArrayList<String> urls){
@@ -166,7 +167,12 @@ public class CrawlerInterface implements Runnable{
 		    e.printStackTrace();
 		}
 		this.download.setQuery("Crawl_" + domain);
-		this.download.addTask(url);
+		JSONObject url_info = new JSONObject();
+		url_info.put("link",url);
+		url_info.put("snippet","");
+		url_info.put("title","");
+		
+		this.download.addTask(url_info);
 		
 		//Crawl page forward
 		System.out.println("Crawling forward " + url);
@@ -227,7 +233,12 @@ public class CrawlerInterface implements Runnable{
 	    }
 
 	    this.download.setQuery("Crawl_" + domain);
-	    this.download.addTask(f_url);
+	    JSONObject url_info = new JSONObject();
+	    url_info.put("link",url);
+	    url_info.put("snippet","");
+	    url_info.put("title","");
+	    
+	    this.download.addTask(url_info);
 	}
 
         return res;

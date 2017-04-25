@@ -114,8 +114,8 @@ class Page(object):
   def queryWeb(self, terms, session):
     session = json.loads(session)
     res = self._model.queryWeb(terms, session=session)
-    cherrypy.response.headers["Content-Type"] = "application/json;"
-    return json.dumps(res)
+    cherrypy.response.headers["Content-Type"] = "text/plain;"
+    return res
 
   # Submits a query for a list of terms, e.g. 'ebola disease' to the seedfinder
   @cherrypy.expose
@@ -255,6 +255,8 @@ class Page(object):
   @cherrypy.expose
   def setTermsTag(self, terms, tag, applyTagFlag, session):
     session = json.loads(session)
+    terms = Page.extractListParam(terms)
+    applyTagFlag =  Page.extractBooleanParam(applyTagFlag)
     self._model.setTermsTag(terms, tag, applyTagFlag, session)
 
   # Update online classifier
@@ -278,13 +280,12 @@ class Page(object):
 
   # Download the pages of uploaded urls
   @cherrypy.expose
-  def downloadUrls(self, urls, session):
+  def uploadUrls(self, urls, session):
     urls = urls.replace("\n", " ")
     session = json.loads(session)
-    res = self._model.downloadUrls(urls, session)
+    res = self._model.uploadUrls(urls, session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
-    return json.dumps(res)
-
+    return json.dumps({"status": "Done"})
 
   # Extracts terms with current labels state.
   @cherrypy.expose
