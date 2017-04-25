@@ -49,7 +49,7 @@ public class GoogleSearch {
 
 	}
 
-	Download download = new Download(query, es_index, es_doc_type, es_server);
+	Download download = new Download(query, null, es_index, es_doc_type, es_server);
 
 	ArrayList<String> urls = new ArrayList<String>();
 
