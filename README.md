@@ -1,8 +1,8 @@
-# domain_discovery_API
+# Domain Discovery (DD) API
 
-An API that contains domain discovery operations
+The Domain Discovery API formalizes the human domain discovery process by defining a set of operations that capture the essential tasks that lead to domain discovery on the Web as we have discovered in interacting with the Subject Matter Experts (SME)s. 
 
-## Installing on your machine
+## Installation
 
 Building and deploying the Domain Discovery can be done using its Makefile to create a local development environment.  The conda build environment is currently only supported on 64-bit OS X and Linux.
 
@@ -23,4 +23,12 @@ Use the `make` command to build DDT and download/install its dependencies.
 make
 ```
 
-Now you can use the API 
+Now you can use the API
+
+## Documentation
+
+More documentation is available [HERE!](http://domain-discovery-api.readthedocs.io/en/dd_api_docs/)
+
+## Contact
+
+Domain Discovery Development Team [ddt-dev@vgc.poly.edu]
