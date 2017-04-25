@@ -7,7 +7,7 @@ DD API Operations
 Acquire Content
 ***************
 .. autoclass:: models.domain_discovery_model.DomainModel
-   :members: queryWeb, uploadUrls, getForwardLinks, getBackwardLinks	 
+   :members: queryWeb, uploadUrls, getForwardLinks, getBackwardLinks, runSeedFinder
 
 Annotate Content
 ****************
@@ -33,7 +33,3 @@ Generate Model
 **************
 .. autoclass:: models.domain_discovery_model.DomainModel
    :members: createModel
-
-	  
-
-	  
