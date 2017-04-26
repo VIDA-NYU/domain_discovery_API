@@ -71,6 +71,13 @@ class Page(object):
     return json.dumps(res)
 
   @cherrypy.expose
+  def getAvailableTLDs(self, session):
+    session = json.loads(session)
+    res = self._model.getAvailableTLDs(session)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(res)
+  
+  @cherrypy.expose
   def getAvailableQueries(self, session):
     session = json.loads(session)
     res = self._model.getAvailableQueries(session)

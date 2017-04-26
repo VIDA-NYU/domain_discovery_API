@@ -131,6 +131,19 @@ class DomainModel(object):
     return \
     [{'id': k, 'name': d['domain_name'], 'creation': d['timestamp'], 'index': d['index'], 'doc_type': d['doc_type']} for k, d in self._domains.items()]
 
+  def getAvailableTLDs(self, session):
+    """ Return all top level domains for the selected domain.
+
+    Parameters:
+        session (json): Should contain the domainId
+
+    Returns:
+        json: {<domain>: <number of pages for the domain>}
+
+    """
+    es_info = self._esInfo(session['domainId'])
+    return get_unique_values('domain', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+  
   def getAvailableQueries(self, session):
     """ Return all queries for the selected domain.
 
