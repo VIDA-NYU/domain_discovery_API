@@ -280,13 +280,12 @@ class Page(object):
 
   # Download the pages of uploaded urls
   @cherrypy.expose
-  def downloadUrls(self, urls, session):
+  def uploadUrls(self, urls, session):
     urls = urls.replace("\n", " ")
     session = json.loads(session)
-    self._model.downloadUrls(urls, session)
+    res = self._model.uploadUrls(urls, session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps({"status": "Done"})
-
 
   # Extracts terms with current labels state.
   @cherrypy.expose

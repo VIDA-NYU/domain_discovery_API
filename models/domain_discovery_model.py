@@ -85,6 +85,20 @@ class DomainModel(object):
 
     self.pool = Pool(max_workers=3)
     self.seedfinder = RunSeedFinder()
+
+  def _encode(self, url):
+    return urllib2.quote(url).replace("/", "%2F")
+
+  def _esInfo(self, domainId):
+    es_info = {
+      "activeDomainIndex": self._domains[domainId]['index'],
+      "docType": self._domains[domainId]['doc_type']
+    }
+    if not self._domains[domainId].get("mapping") is None:
+      es_info["mapping"] = self._domains[domainId]["mapping"]
+    else:
+      es_info["mapping"] = self._mapping
+    return es_info
     
   def setPath(self, path):
     self._path = path
@@ -95,13 +109,20 @@ class DomainModel(object):
   def getAvailablePageRetrievalCriteria(self):
     return [{'name': key} for key in self.pageRetrieval.keys()]
 
-  # Returns a list of available seed domains in the format:
-  # [
-  #   {'id': domainId, 'name': domainName, 'creation': epochInSecondsOfFirstDownloadedURL},
-  #   {'id': domainId, 'name': domainName, 'creation': epochInSecondsOfFirstDownloadedURL},
-  #   ...
-  # ]
   def getAvailableDomains(self):
+    """
+    List the domains as saved in elasticsearch.
+ 
+    Parameters:
+        None
+
+    Returns:
+       array: [
+           {'id': domainId, 'name': domainName, 'creation': epochInSecondsOfFirstDownloadedURL},
+           ...
+           ]
+
+    """
     # Initializes elastic search.
     self._es = es
 
@@ -111,11 +132,30 @@ class DomainModel(object):
     [{'id': k, 'name': d['domain_name'], 'creation': d['timestamp'], 'index': d['index'], 'doc_type': d['doc_type']} for k, d in self._domains.items()]
 
   def getAvailableQueries(self, session):
-    es_info = self.esInfo(session['domainId'])
+    """ Return all queries for the selected domain.
+
+    Parameters:
+        session (json): Should contain the domainId
+
+    Returns:
+        json: {<query>: <number of pages for the query>}
+
+    """
+    es_info = self._esInfo(session['domainId'])
     return get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
 
   def getAvailableTags(self, session):
-    es_info = self.esInfo(session['domainId'])
+    """ Return all tags for the selected domain.
+
+    Parameters:
+        session (json): Should contain the domainId
+
+    Returns:
+        json: {<tag>: <number of pages for the tag>}
+
+    """
+
+    es_info = self._esInfo(session['domainId'])
 
     tags_neutral = field_missing("tag", ["url"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
     unique_tags = {"Neutral": len(tags_neutral)}
@@ -132,7 +172,7 @@ class DomainModel(object):
     return unique_tags
 
   def getAvailableModelTags(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     unsure_tags = self._getUnsureLabelPages(session)
     unique_tags = {"Unsure": len(unsure_tags)}
@@ -145,239 +185,27 @@ class DomainModel(object):
 
     return unique_tags
 
-  def encode(self, url):
-    return urllib2.quote(url).replace("/", "%2F")
-
-  def esInfo(self, domainId):
-    es_info = {
-      "activeDomainIndex": self._domains[domainId]['index'],
-      "docType": self._domains[domainId]['doc_type']
-    }
-    if not self._domains[domainId].get("mapping") is None:
-      es_info["mapping"] = self._domains[domainId]["mapping"]
-    else:
-      es_info["mapping"] = self._mapping
-    return es_info
-
-  # Run ACHE SeedFinder to generate queries and corresponding seed urls
-  def runSeedFinder(self, terms, session):
-    es_info = self.esInfo(session['domainId']);
-
-    data_dir = self._path + "/data/"
-    data_domain  = data_dir + es_info['activeDomainIndex']
-
-    domainmodel_dir = data_domain + "/models/"
-
-    if (not isfile(domainmodel_dir+"pageclassifier.model")):
-      self.createModel(session, zip=False)
-
-    print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
-
-    # Execute SeedFinder in a new thread
-    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, es_info)
-
-  def createModel(self, session, zip=True):
-    es_info = self.esInfo(session['domainId']);
-
-    data_dir = self._path + "/data/"
-    data_domain  = data_dir + es_info['activeDomainIndex']
-    data_training = data_domain + "/training_data/"
-    data_negative = data_domain + "/training_data/negative/"
-    data_positive = data_domain + "/training_data/positive/"
-
-    if (not isdir(data_positive)):
-      # Create dir if it does not exist
-      makedirs(data_positive)
-    else:
-      # Remove all previous files
-      for filename in os.listdir(data_positive):
-        os.remove(data_positive+filename)
-
-    if (not isdir(data_negative)):
-      # Create dir if it does not exist
-      makedirs(data_negative)
-    else:
-      # Remove all previous files
-      for filename in os.listdir(data_negative):
-        os.remove(data_negative+filename)
-
-    pos_tags = "Relevant"
-    neg_tags = "Irrelevant"
-    try:
-      pos_tags = session['model']['positive']
-    except KeyError:
-      print "Using default positive tags"
-
-    try:
-      neg_tags = session['model']['negative']
-    except KeyError:
-      print "Using default negative tags"
-
-    pos_docs = []
-    for tag in pos_tags.split(','):
-      s_fields = {}
-      query = {
-        "wildcard": {es_info['mapping']["tag"]:tag}
-      }
-      s_fields["queries"] = [query]
-      pos_docs = pos_docs + multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
-                                                   es_info['activeDomainIndex'],
-                                                   es_info['docType'],
-                                                   self._es)
-    neg_docs = []
-    for tag in neg_tags.split(','):
-      s_fields = {}
-      query = {
-        "wildcard": {es_info['mapping']["tag"]:tag}
-      }
-      s_fields["queries"] = [query]
-      neg_docs = neg_docs + multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
-                                                   es_info['activeDomainIndex'],
-                                                   es_info['docType'],
-                                                   self._es)
-
-    pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
-    neg_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in neg_docs}
-
-    seeds_file = data_domain +"/seeds.txt"
-    print "Seeds path ", seeds_file
-    with open(seeds_file, 'w') as s:
-      for url in pos_html:
-        try:
-          file_positive = data_positive + self.encode(url.encode('utf8'))
-          s.write(url.encode('utf8') + '\n')
-          with open(file_positive, 'w') as f:
-            f.write(pos_html[url])
-
-        except IOError:
-          _, exc_obj, tb = exc_info()
-          f = tb.tb_frame
-          lineno = tb.tb_lineno
-          filename = f.f_code.co_filename
-          linecache.checkcache(filename)
-          line = linecache.getline(filename, lineno, f.f_globals)
-          print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
-
-    for url in neg_html:
-      try:
-        file_negative = data_negative + self.encode(url.encode('utf8'))
-        with open(file_negative, 'w') as f:
-          f.write(neg_html[url])
-      except IOError:
-        _, exc_obj, tb = exc_info()
-        f = tb.tb_frame
-        lineno = tb.tb_lineno
-        filename = f.f_code.co_filename
-        linecache.checkcache(filename)
-        line = linecache.getline(filename, lineno, f.f_globals)
-        print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
-
-    domainmodel_dir = data_domain + "/models/"
-
-    if (not isdir(domainmodel_dir)):
-      makedirs(domainmodel_dir)
-
-    ache_home = environ['ACHE_HOME']
-    comm = ache_home + "/bin/ache buildModel -t " + data_training + " -o "+ domainmodel_dir + " -c " + ache_home + "/config/stoplist.txt"
-    p = Popen(comm, shell=True, stderr=PIPE)
-    output, errors = p.communicate()
-    print output
-    print errors
-
-    if zip:
-      zip_filename = data_domain + es_info['activeDomainIndex'] + "_model.zip"
-      with ZipFile(zip_filename, "w") as modelzip:
-        if (isfile(domainmodel_dir + "/pageclassifier.features")):
-          print "zipping file: "+domainmodel_dir + "/pageclassifier.features"
-          modelzip.write(domainmodel_dir + "/pageclassifier.features", "pageclassifier.features")
-
-        if (isfile(domainmodel_dir + "/pageclassifier.model")):
-          print "zipping file: "+domainmodel_dir + "/pageclassifier.model"
-          modelzip.write(domainmodel_dir + "/pageclassifier.model", "pageclassifier.model")
-
-        if (exists(data_domain + "/training_data/positive")):
-          print "zipping file: "+ data_domain + "/training_data/positive"
-          for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/positive"):
-            for html_file in filenames:
-              modelzip.write(dirpath + "/" + html_file, "training_data/positive/" + html_file)
-
-        if (exists(data_domain + "/training_data/negative")):
-          print "zipping file: "+ data_domain + "/training_data/negative"
-          for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/negative"):
-            for html_file in filenames:
-              modelzip.write(dirpath + "/" + html_file, "training_data/negative/" + html_file)
-
-        if (isfile(data_domain +"/seeds.txt")):
-          print "zipping file: "+data_domain +"/seeds.txt"
-          modelzip.write(data_domain +"/seeds.txt", es_info['activeDomainIndex'] + "_seeds.txt")
-
-        chmod(zip_filename, 0o777)
-
-      return "models/" + es_info['activeDomainIndex'] + "_model.zip"
-    else:
-      return None
-
-
-  # Returns number of pages downloaded between ts1 and ts2 for active domain.
-  # ts1 and ts2 are Unix epochs (seconds after 1970).
-  # If opt_applyFilter is True, the summary returned corresponds to the applied pages filter defined
-  # previously in @applyFilter. Otherwise the returned summary corresponds to the entire dataset
-  # between ts1 and ts2.
-  # Returns dictionary in the format:
-  # {
-  #   'Positive': {'Explored': numExploredPages, 'Exploited': numExploitedPages},
-  #   'Negative': {'Explored': numExploredPages, 'Exploited': numExploitedPages},
-  # }
-  def getPagesSummaryDomain(self, opt_ts1 = None, opt_ts2 = None, opt_applyFilter = False, session = None):
-    es_info = self.esInfo(session['domainId'])
-
-    # If ts1 not specified, sets it to -Infinity.
-    if opt_ts1 is None:
-      now = time.localtime(0)
-      opt_ts1 = int(time.mktime(now))
-    else:
-      opt_ts1 = int(opt_ts1)
-
-    # If ts2 not specified, sets it to now.
-    if opt_ts2 is None:
-      now = time.localtime()
-      opt_ts2 = int(time.mktime(now))
-    else:
-      opt_ts2 = int(opt_ts2)
-
-    # TODO(Yamuna): Query Elastic Search (schema self._activeDomainId) for number of downloaded pages
-    # between given Unix epochs.
-    # TODO(Yamuna): apply filter if it is None. Otherwise, match_all.
-    print '\n\n *** init', opt_ts1
-
-    inc = opt_ts2 - opt_ts1
-
-    print '\n\n *** delta', inc
-
-    explored = int(opt_ts1 / 10E6 + inc)
-    exploited = int(opt_ts1 / 10E8 + inc / 2)
-    boosted = int(opt_ts1 / 10E8 + inc / 2)
-    return { \
-      'Positive': {'Explored': explored, 'Exploited': exploited, 'Boosted': boosted},
-      'Negative': {'Explored': explored / 5, 'Exploited': exploited / 5, 'Boosted':  boosted / 5},
-    }
-
-
-
-  # Returns number of pages downloaded between ts1 and ts2 for active domain.
-  # ts1 and ts2 are Unix epochs (seconds after 1970).
-  # If opt_applyFilter is True, the summary returned corresponds to the applied pages filter defined
-  # previously in @applyFilter. Otherwise the returned summary corresponds to the entire dataset
-  # between ts1 and ts2.
-  # Returns dictionary in the format:
-  # {
-  #   'Relevant': numRelevantPages,
-  #   'Irrelevant': numIrrelevantPages,
-  #   'Neutral': numNeutralPages,
-  # }
   def getPagesSummaryDomain(self, opt_ts1 = None, opt_ts2 = None, opt_applyFilter = False, session = None):
 
-    es_info = self.esInfo(session['domainId'])
+    """ Returns number of pages downloaded between opt_ts1 and opt_ts2 for active domain.  
+    If opt_applyFilter is True, the summary returned corresponds 
+    to the applied pages filter defined previously in @applyFilter. Otherwise the returned summary
+    corresponds to the entire dataset between ts1 and ts2.
+    
+    Parameters:
+        opt_ts1 (long): start time from when pages need to be returned. Unix epochs (seconds after 1970).
+      
+        opt_ts2 (long): start time from when pages need to be returned. Unix epochs (seconds after 1970).
+
+        opt_applyFiler (bool): Apply filtering to the pages
+
+        session (json): session information
+
+    Returns:
+        json: {'Positive': {'Explored': explored, 'Exploited': exploited, 'Boosted': boosted},
+               'Negative': {'Explored': numExploredPages, 'Exploited': numExploitedPages},...}
+    """ 
+    es_info = self._esInfo(session['domainId'])
 
     # If ts1 not specified, sets it to -Infinity.
     if opt_ts1 is None:
@@ -398,7 +226,7 @@ class DomainModel(object):
                                       self._es)
     if opt_applyFilter and session['filter'] != "":
       #TODO(Sonia):results based in multi queries
-      results = self.getPagesQuery(session)
+      results = self._getPagesQuery(session)
 
       #results = get_most_recent_documents(session['pagesCap'], es_info['mapping'], ["url", es_info['mapping']["tag"]],
                                           #session['filter'], es_info['activeDomainIndex'], es_info['docType'],  \
@@ -466,16 +294,457 @@ class DomainModel(object):
       'TotalNeutral': total_neutral
     }
 
-  # Returns number of terms present in relevant and irrelevant pages.
-  # Returns array in the format:
-  # [
-  #   [term, frequencyInRelevantPages, frequencyInIrrelevantPages, tags],
-  #   [term, frequencyInRelevantPages, frequencyInIrrelevantPages, tags],
-  #   ...
-  # ]
-  def getTermsSummaryDomain(self, opt_maxNumberOfTerms = 40, session = None):
 
-    es_info = self.esInfo(session['domainId'])
+  def _setPagesCountCap(self, pagesCap):
+    self._pagesCap = int(pagesCap)
+
+  # Boosts set of pages: domain exploits outlinks for the given set of pages in active domain.
+  def boostPages(self, pages):
+    # TODO(Yamuna): Issue boostPages on running domain defined by active domainId.
+    i = 0
+    print 3 * '\n', 'boosted pages', str(pages), 3 * '\n'
+
+  # Fetches snippets for a given term.
+  def getTermSnippets(self, term, session):
+    es_info = self._esInfo(session['domainId'])
+
+    #tags = get_documents(term, 'term', ['tag'], es_info['activeDomainIndex'], 'terms', self._es)
+
+
+    s_fields = {
+      "term": term,
+      "index": es_info['activeDomainIndex'],
+      "doc_type": es_info['docType'],
+    }
+
+    tags = multifield_term_search(s_fields, self._capTerms, ['tag'], self._termsIndex, 'terms', self._es)
+
+    tag = []
+    if tags:
+      tag = tags[0]['tag'][0].split(';')
+
+    return {'term': term, 'tags': tag, 'context': get_context(term.split('_'), es_info['mapping']['text'], es_info['activeDomainIndex'], es_info['docType'],  self._es)}
+
+  # Delete terms from term window and from the ddt_terms index
+  def deleteTerm(self,term, session):
+    es_info = self._esInfo(session['domainId'])
+    delete([term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']], self._termsIndex, "terms", self._es)
+
+  # Add domain
+  def addDomain(self, index_name):
+
+    create_index(index_name, es=self._es)
+
+    fields = index_name.lower().split(' ')
+    index = '_'.join([item for item in fields if item not in ''])
+    index_name = ' '.join([item for item in fields if item not in ''])
+    entry = { "domain_name": index_name.title(),
+              "index": index,
+              "doc_type": "page",
+              "timestamp": datetime.utcnow(),
+            }
+
+    load_config([entry])
+
+  # Delete domain
+  def delDomain(self, domains):
+
+    for index in domains.values():
+      # Delete Index
+      delete_index(index, self._es)
+      # Delete terms tagged for the index
+      ddt_terms_keys = [doc["id"] for doc in term_search("index", [index], self._all, ["term"], "ddt_terms", "terms", self._es)]
+      delete_document(ddt_terms_keys, "ddt_terms", "terms", self._es)
+
+    # Delete indices from config index
+    delete_document(domains.keys(), "config", "domains", self._es)
+
+  def updateColors(self, session, colors):
+    es_info = self._esInfo(session['domainId'])
+
+    entry = {
+      session['domainId']: {
+        "colors": colors["colors"],
+        "index": colors["index"]
+      }
+    }
+
+    update_document(entry, "config", "tag_colors", self._es)
+
+  def getTagColors(self, domainId):
+    tag_colors = get_tag_colors(self._es).get(domainId)
+
+    colors = None
+    if tag_colors is not None:
+      colors = {"index": tag_colors["index"]}
+      colors["colors"] = {}
+      for color in tag_colors["colors"]:
+        fields  = color.split(";")
+        colors["colors"][fields[0]] = fields[1]
+
+    return colors
+  
+#######################################################################################################
+# Acquire Content
+#######################################################################################################
+
+  def queryWeb(self, terms, max_url_count = 100, session = None):
+    """ Issue query on the web: results are stored in elastic search, nothing returned here.
+    
+    Parameters:
+        terms (string): Search query string
+        max_url_count (int): Number of pages to query. Maximum allowed = 100
+        session (json): should have domainId
+    
+    Returns:
+        None
+
+    """
+    es_info = self._esInfo(session['domainId'])
+
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
+
+    if(int(session['pagesCap']) <= max_url_count):
+      top = int(session['pagesCap'])
+    else:
+      top = max_url_count
+
+    if 'GOOG' in session['search_engine']:
+      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -t " + str(top) + \
+             " -q \"" + terms + "\"" + \
+             " -i " + es_info['activeDomainIndex'] + \
+             " -d " + es_info['docType'] + \
+             " -s " + es_server
+
+    elif 'BING' in session['search_engine']:
+      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar BingSearch -t " + str(top) + \
+             " -q \"" + terms + "\"" + \
+             " -i " + es_info['activeDomainIndex'] + \
+             " -d " + es_info['docType'] + \
+             " -s " + es_server
+
+
+    p=Popen(comm, shell=True, stdout=PIPE)
+    output, errors = p.communicate()
+
+    print "\n\n\n QUERY WEB OUTPUT \n", "\n",output,"\n\n\n"
+    print "\n\n\n QUERY WEB ERRORS \n", errors,"\n\n\n"
+
+    num_pages = self._getNumPagesDownloaded(output)
+
+    return {"pages":num_pages}
+
+  def _getNumPagesDownloaded(self, output):
+    index = output.index("Number of results:")
+    n_pages = output[index:]
+    n = int(n_pages.split(":")[1])
+    return n
+
+  def uploadUrls(self, urls_str, session):
+    """ Download pages corresponding to already known set of domain URLs
+    
+    Parameters:
+        urls_str (string): Space separated list of URLs
+        session (json): should have domainId
+    
+    Returns:
+        number of pages downloaded (int)
+
+    """
+    es_info = self._esInfo(session['domainId'])
+
+    output = callDownloadUrls("uploaded", None, urls_str, es_info)
+
+    return output
+
+  def getForwardLinks(self, urls, session):
+    """ The content can be extended by crawling the given pages one level forward. The assumption here is that a relevant page will contain links to other relevant pages.
+    
+    Parameters:
+        urls (list): list of urls to crawl forward
+        session (json): should have domainId
+
+    Return:
+        None (Results are downloaded into elasticsearch)
+    """
+    es_info = self._esInfo(session['domainId'])
+
+    results = field_exists("crawled_forward", [es_info['mapping']['url'], "crawled_forward"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    already_crawled = [result[es_info["mapping"]["url"]][0] for result in results if result["crawled_forward"][0] == 1]
+    not_crawled = list(Set(urls).difference(already_crawled))
+    results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
+
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
+
+    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c forward"\
+           " -u \"" + ",".join(not_crawled_urls) + "\"" + \
+           " -t " + session["pagesCap"] + \
+           " -i " + es_info['activeDomainIndex'] + \
+           " -d " + es_info['docType'] + \
+           " -s " + es_server
+
+    p=Popen(comm, shell=True, stderr=PIPE)
+    output, errors = p.communicate()
+    print output
+    print errors
+
+  # Crawl backward
+  def getBackwardLinks(self, urls, session):
+    """ The content can be extended by crawling the given pages one level back to the pages that link to them. The assumption here is that a page containing the link to the given relevant page will contain links to other relevant pages.
+
+    Parameters:
+        urls (list): list of urls to crawl backward
+        session (json): should have domainId
+
+    Return:
+        None (Results are downloaded into elasticsearch)
+
+    """
+    es_info = self._esInfo(session['domainId'])
+
+    results = field_exists("crawled_backward", [es_info['mapping']['url']], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    already_crawled = [result[es_info["mapping"]["url"]][0] for result in results]
+    not_crawled = list(Set(urls).difference(already_crawled))
+    results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
+
+    chdir(environ['DD_API_HOME']+'/seeds_generator')
+
+    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c backward"\
+           " -u \"" + ",".join(not_crawled_urls) + "\"" + \
+           " -t " + session["pagesCap"] + \
+           " -i " + es_info['activeDomainIndex'] + \
+           " -d " + es_info['docType'] + \
+           " -s " + es_server
+
+    p=Popen(comm, shell=True, stderr=PIPE)
+    output, errors = p.communicate()
+    print output
+    print errors
+
+  def runSeedFinder(self, terms, session):
+    """ Execute the SeedFinder witht the specified terms. The details of the url results of the SeedFinder
+    are uploaded into elasticsearch.
+
+    Parameters:
+        terms (str): terms for the inital query
+
+        session (json): Should contain the domainId
+
+    Returns:
+        None
+    """
+    es_info = self._esInfo(session['domainId']);
+
+    data_dir = self._path + "/data/"
+    data_domain  = data_dir + es_info['activeDomainIndex']
+
+    domainmodel_dir = data_domain + "/models/"
+
+    if (not isfile(domainmodel_dir+"pageclassifier.model")):
+      self.createModel(session, zip=False)
+
+    print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
+
+    # Execute SeedFinder in a new thread
+    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, es_info)
+
+
+#######################################################################################################
+# Annotate Content
+#######################################################################################################
+
+  def setPagesTag(self, pages, tag, applyTagFlag, session):
+    """ Tag the pages with the given tag which can be a custom tag or 'Relevant'/'Irrelevant' which indicate relevance or irrelevance to the domain of interest. Tags help in clustering and categorizing the pages. They also help build computational models of the domain.
+
+    Parameters:
+        pages (urls): list of urls to apply tag
+        tag (string): custom tag, 'Relevant', 'Irrelevant'
+        applyTagFlag (bool): True - Add tag, False - Remove tag
+        session (json): Should contain domainId
+
+    Returns: 
+       Returns string "Completed Process"
+    
+    """
+    es_info = self._esInfo(session['domainId'])
+
+    entries = {}
+    results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
+
+    if applyTagFlag and len(results) > 0:
+      print '\n\napplied tag ' + tag + ' to pages' + str(pages) + '\n\n'
+
+      for page in pages:
+        if not results.get(page) is None:
+          # pages to be tagged exist
+          records = results[page]
+          for record in records:
+            entry = {}
+            if record.get(es_info['mapping']['tag']) is None:
+              # there are no previous tags
+              entry[es_info['mapping']['tag']] = [tag]
+              entry["unsure_tag"] = 0
+              entry["label_pos"] = 0
+              entry["label_neg"] = 0
+            else:
+              tags = record[es_info['mapping']['tag']]
+              if len(tags) != 0:
+                # previous tags exist
+                if not tag in tags:
+                  # append new tag
+                  tags.append(tag)
+                  entry[es_info['mapping']['tag']] = tags
+                  entry["unsure_tag"] = 0
+                  entry["label_pos"] = 0
+                  entry["label_neg"] = 0
+
+                  self._removeClassifierSample(session['domainId'], record['id'])
+              else:
+                # add new tag
+                entry[es_info['mapping']['tag']] = [tag]
+                entry["unsure_tag"] = 0
+                entry["label_pos"] = 0
+                entry["label_neg"] = 0
+
+            if entry:
+                  entries[record['id']] =  entry
+
+    elif len(results) > 0:
+      print '\n\nremoved tag ' + tag + ' from pages' + str(pages) + '\n\n'
+
+      for page in pages:
+        if not results.get(page) is None:
+          records = results[page]
+          for record in records:
+            entry = {}
+            if not record.get(es_info['mapping']['tag']) is None:
+              tags = record[es_info['mapping']['tag']]
+              if tag in tags:
+                tags.remove(tag)
+                entry[es_info['mapping']['tag']] = tags
+                entries[record['id']] = entry
+
+
+    if entries:
+      update_try = 0
+      while (update_try < 10):
+        try:
+          update_document(entries, es_info['activeDomainIndex'], es_info['docType'], self._es)
+          break
+        except:
+          update_try = update_try + 1
+
+      if (session['domainId'] in self._onlineClassifiers) and (not applyTagFlag) and (tag in ["Relevant", "Irrelevant"]):
+        self._onlineClassifiers.pop(session['domainId'])
+
+    return "Completed Process."
+
+  def setTermsTag(self, terms, tag, applyTagFlag, session):
+    # TODO(Yamuna): Apply tag to page and update in elastic search. Suggestion: concatenate tags
+    # with semi colon, removing repetitions.
+    """ Tag the terms as 'Positive'/'Negative' which indicate relevance or irrelevance to the domain of interest. Tags help in reranking terms to show the ones relevan to the domain.
+    
+    Parameters:
+        terms (string): list of terms to apply tag
+        tag (string): 'Positive' or 'Negative'
+        applyTagFlag (bool): True - Add tag, False - Remove tag
+        session (json): Should contain domainId
+
+    Returns: 
+        None
+    
+    """
+    es_info = self._esInfo(session['domainId'])
+
+    s_fields = {
+      "term": "",
+      "index": es_info['activeDomainIndex'],
+      "doc_type": es_info['docType'],
+    }
+
+    tags = []
+    for term in terms:
+      s_fields["term"] = term
+      res = multifield_term_search(s_fields, 1, ['tag'], self._termsIndex, 'terms', self._es)
+      tags.extend(res)
+
+    results = {result['id']: result['tag'][0] for result in tags}
+
+    add_entries = []
+    update_entries = {}
+
+    if applyTagFlag:
+      for term in terms:
+        if len(results) > 0:
+          if results.get(term) is None:
+            entry = {
+              "term" : term,
+              "tag" : tag,
+              "index": es_info['activeDomainIndex'],
+              "doc_type": es_info['docType'],
+              "_id" : term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']
+            }
+            add_entries.append(entry)
+          else:
+            old_tag = results[term]
+            if tag not in old_tag:
+              entry = {
+                "term" : term,
+                "tag" : tag,
+                "index": es_info['activeDomainIndex'],
+                "doc_type": es_info['docType'],
+              }
+              update_entries[term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']] = entry
+        else:
+          entry = {
+            "term" : term,
+            "tag" : tag,
+            "index": es_info['activeDomainIndex'],
+            "doc_type": es_info['docType'],
+            "_id": term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']
+          }
+          add_entries.append(entry)
+    else:
+      for term in terms:
+        if len(results) > 0:
+          if not results.get(term) is None:
+            if tag in results[term]:
+              entry = {
+                "term" : term,
+                "tag" : "",
+                "index": es_info['activeDomainIndex'],
+                "doc_type": es_info['docType']
+              }
+              update_entries[term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']] = entry
+
+    if add_entries:
+      add_document(add_entries, self._termsIndex, 'terms', self._es)
+
+    if update_entries:
+      update_document(update_entries, self._termsIndex, 'terms', self._es)
+
+#######################################################################################################
+# Summarize Content
+#######################################################################################################
+
+  def extractTerms(self, opt_maxNumberOfTerms = 40, session = None):
+    """ Extract most relevant unigrams, bigrams and trigrams that summarize the pages.
+    These could provide unknown information about the domain. This in turn could 
+    suggest further queries for searching content.
+
+    Parameters:
+        opt_maxNumberOfTerms (int): Number of terms to return
+
+        session (json): should have domainId
+            
+    Returns:
+        array: [[term, frequencyInRelevantPages, frequencyInIrrelevantPages, tags], ...]
+    
+    """
+
+    es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
     if not session['fromDate'] is None:
@@ -495,7 +764,7 @@ class DomainModel(object):
     neg_terms = [field['term'][0] for field in multifield_term_search(s_fields, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)]
 
     # Get selected pages displayed in the MDS window
-    results = self.getPagesQuery(session)
+    results = self._getPagesQuery(session)
 
     top_terms = []
     top_bigrams = []
@@ -748,13 +1017,191 @@ class DomainModel(object):
 
     return terms
 
-  # Sets limit to pages returned by @getPages.
-  def setPagesCountCap(self, pagesCap):
-    self._pagesCap = int(pagesCap)
+  def make_topic_model(self, session, tokenizer, vectorizer, model, ntopics):
+    """Build topic model from the corpus of the supplied DDT domain.
 
+    The topic model is represented as a topik.TopikProject object, and is
+    persisted in disk, recording the model parameters and the location of the
+    data. The output of the topic model itself is stored in Elasticsearch.
+
+    Parameters:
+
+        domain (str): DDT domain name as stored in Elasticsearch, so lowercase and with underscores in place of spaces.
+
+        tokenizer (str): A tokenizer from ``topik.tokenizer.registered_tokenizers``
+
+        vectorizer (str): A vectorization method from ``topik.vectorizers.registered_vectorizers``
+
+        model (str): A topic model from ``topik.vectorizers.registered_models``
+
+        ntopics (int): The number of topics to be used when modeling the corpus.
+
+    Returns:
+    
+        model: topik model, encoding things like term frequencies, etc.
+    """
+    es_info = self._esInfo(session['domainId'])
+    content_field = self._mapping['text']
+
+    def not_empty(doc): return bool(doc[content_field][0])  # True if document not empty
+
+    raw_data = filter(not_empty, get_all_ids(fields=['text'], es_index=es_info['activeDomainIndex'], es = self._es))
+
+    id_doc_pairs = ((hash(__[content_field][0]), __[content_field][0]) for __ in raw_data)
+
+    def not_empty_tokens(toks): return bool(toks[1])  # True if document not empty
+
+    tokens = filter(not_empty_tokens, tokenize(id_doc_pairs, method=tokenizer))
+
+    vectors = vectorize(tokens, method=vectorizer)
+    model = run_model(vectors, model_name=model, ntopics=ntopics)
+
+    return {"model": model, "domain": es_info['activeDomainIndex']}
+  
+
+#######################################################################################################
+# Organize Content
+#######################################################################################################
+  
+  def getPagesProjection(self, session):
+    """ Organize content by some criteria such as relevance, similarity or category which allows to easily analyze groups of pages. The 'x','y' co-ordinates returned project the page in 2D maintaining clustering based on the projection chosen. The projection criteria is specified in the session object
+
+    Parameters:
+        session: Should Contain 'domainId' \
+                 Should contain 'activeProjectionAlg' which takes values 'tsne', 'pca' or 'kmeans' currently
+
+    Returns dictionary in the format:{ \
+      'last_downloaded_url_epoch': 1432310403 (in seconds) \
+      'pages': [ \
+                [url1, x, y, tags, retrieved],     (tags are a list, potentially empty) \
+                [url2, x, y, tags, retrieved], \
+                [url3, x, y, tags, retrieved],
+      ]\
+    }
+    """
+    es_info = self._esInfo(session['domainId'])
+
+    format = '%m/%d/%Y %H:%M %Z'
+    if not session['fromDate'] is None:
+      session['fromDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['fromDate'], format)))
+
+    if not session['toDate'] is None:
+      session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
+
+    hits = self._getPagesQuery(session)
+
+    return self._generatePagesProjection(hits, session)
+
+  def _generatePagesProjection(self, hits, session):
+    es_info = self._esInfo(session['domainId'])
+
+    last_downloaded_url_epoch = None
+    docs = []
+
+    for i, hit in enumerate(hits):
+      if last_downloaded_url_epoch is None:
+        if not hit.get(es_info['mapping']['timestamp']) is None:
+          last_downloaded_url_epoch = str(hit[es_info['mapping']['timestamp']][0])
+
+      doc = ["", 0, 0, [], "", ""]
+
+      if not hit.get('url') is None:
+        doc[0] = hit.get('url')
+      if not hit.get('x') is None:
+        doc[1] = hit['x'][0]
+      if not hit.get('y') is None:
+        doc[2] = hit['y'][0]
+      if not hit.get(es_info['mapping']['tag']) is None:
+        doc[3] = hit[es_info['mapping']['tag']]
+      if not hit.get('id') is None:
+        doc[4] = hit['id']
+      if not hit.get(es_info['mapping']["text"]) is None:
+        doc[5] = " ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH])
+
+      if doc[5] != "":
+        docs.append(doc)
+
+    if len(docs) > 1:
+      # Prepares results: computes projection.
+      # Update x, y for pages after projection is done.
+
+      projectionData = self.projectPages(docs, session['activeProjectionAlg'], es_info=es_info)
+
+      last_download_epoch = last_downloaded_url_epoch
+      try:
+        format = '%Y-%m-%dT%H:%M:%S.%f'
+        if '+' in last_downloaded_url_epoch:
+          format = '%Y-%m-%dT%H:%M:%S+0000'
+        last_download_epoch = DomainModel.convert_to_epoch(datetime.strptime(last_downloaded_url_epoch, format))
+      except ValueError:
+        try:
+          format = '%Y-%m-%d %H:%M:%S.%f'
+          last_download_epoch = DomainModel.convert_to_epoch(datetime.strptime(last_downloaded_url_epoch, format))
+        except ValueError:
+          pass
+
+      return {\
+              'last_downloaded_url_epoch':  last_download_epoch,
+              'pages': projectionData
+            }
+    elif len(docs) == 1:
+      doc = docs[0]
+      return {'pages': [[doc[0],1,1,doc[3]]]}
+    else:
+      return {'pages': []}
+  
+#######################################################################################################
+# Filter Content
+#######################################################################################################
+
+  def getPages(self, session):
+    """ Find pages that satisfy the specified criteria. One or more of the following criteria are specified
+    in the session object as 'pageRetrievalCriteria':
+    
+    'Most Recent', 'More like', 'Queries', 'Tags', 'Model Tags', 'Maybe relevant', 'Maybe irrelevant', 'Unsure'
+    
+    and filter by keywords specified in the session object as 'filter'
+    
+    Parameters:
+        session (json): Should contain 'domainId','pageRetrievalCriteria' or 'filter'
+
+    Returns: 
+        json: {url1: {snippet, image_url, title, tags, retrieved}} (tags are a list, potentially empty)
+
+    """
+    es_info = self._esInfo(session['domainId'])
+
+    format = '%m/%d/%Y %H:%M %Z'
+    if not session.get('fromDate') is None:
+      session['fromDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['fromDate'], format)))
+
+    if not session.get('toDate') is None:
+      session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
+
+    hits = self._getPagesQuery(session)
+
+    docs = {}
+    for hit in hits:
+      doc = {}
+      if not hit.get('description') is None:
+        doc["snippet"] = " ".join(hit['description'][0].split(" ")[0:20])
+      if not hit.get('image_url') is None:
+        doc["image_url"] = hit['image_url'][0]
+      if not hit.get('title') is None:
+        doc["title"] = hit['title'][0]
+      if not hit.get(es_info['mapping']['tag']) is None:
+        doc["tags"] = hit[es_info['mapping']['tag']]
+      if not hit.get("rank") is None:
+        doc["tags"] = hit["rank"]
+      if not hit.get(es_info['mapping']["timestamp"]) is None:
+        doc["timestamp"] = hit[es_info['mapping']["timestamp"]]
+
+      docs[hit['url'][0]] = doc
+
+    return docs
 
   def _getMostRecentPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     hits = []
     if session['fromDate'] is None:
@@ -781,7 +1228,7 @@ class DomainModel(object):
     return hits
 
   def _getPagesForQueriesTags(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     s_fields = {}
     s_fields_aux = {}
@@ -845,7 +1292,7 @@ class DomainModel(object):
 
 
   def _getPagesForQueries(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     s_fields = {}
     if not session['filter'] is None:
@@ -873,7 +1320,7 @@ class DomainModel(object):
     return hits
 
   def _getPagesForTags(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     s_fields = {}
     if not session['filter'] is None:
@@ -940,14 +1387,14 @@ class DomainModel(object):
     return hits
 
   def _getRelevantPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     pos_hits = search(es_info['mapping']['tag'], ['relevant'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], 'page', self._es)
 
     return pos_hits
 
   def _getMoreLikePages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     hits=[]
     tags = session['selected_tags'].split(',')
@@ -964,7 +1411,7 @@ class DomainModel(object):
     return hits
 
   def _getMoreLikePagesAll(self, session, tag_hits):
-      es_info = self.esInfo(session['domainId'])
+      es_info = self._esInfo(session['domainId'])
       if len(tag_hits) > 0:
           tag_urls = [field['id'] for field in tag_hits]
           results = get_more_like_this(tag_urls, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], session['pagesCap'],  es_info['activeDomainIndex'], es_info['docType'],  self._es)
@@ -973,27 +1420,27 @@ class DomainModel(object):
       return aux_result
 
   def _getUnsureLabelPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
     unsure_label_hits = term_search("unsure_tag", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return unsure_label_hits
 
   def _getPosLabelPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     pos_label_hits = term_search("label_pos", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return pos_label_hits
 
   def _getNegLabelPages(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     neg_label_hits = term_search("label_neg", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return neg_label_hits
 
-  def getPagesQuery(self, session):
-    es_info = self.esInfo(session['domainId'])
+  def _getPagesQuery(self, session):
+    es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
     if not session.get('fromDate') is None:
@@ -1024,367 +1471,166 @@ class DomainModel(object):
 
     return hits
 
-  # Returns dictionary in the format:
-  #
-  #   {url1: {snippet, image_url, title, tags, retrieved}} (tags are a list, potentially empty)
-  #
-  def getPages(self, session):
-    es_info = self.esInfo(session['domainId'])
 
-    format = '%m/%d/%Y %H:%M %Z'
-    if not session.get('fromDate') is None:
-      session['fromDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['fromDate'], format)))
 
-    if not session.get('toDate') is None:
-      session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
+#######################################################################################################
+# Generate Model
+#######################################################################################################
 
-    hits = self.getPagesQuery(session)
+  def createModel(self, session, zip=True):
+    """ Create an ACHE model to be applied to SeedFinder and focused crawler.
+    It saves the classifiers, features, the training data in the <project>/data/<domain> directory.
+    If zip=True all generated files and folders are zipped into a file.
 
-    docs = {}
-    for hit in hits:
-      doc = {}
-      if not hit.get('description') is None:
-        doc["snippet"] = " ".join(hit['description'][0].split(" ")[0:20])
-      if not hit.get('image_url') is None:
-        doc["image_url"] = hit['image_url'][0]
-      if not hit.get('title') is None:
-        doc["title"] = hit['title'][0]
-      if not hit.get(es_info['mapping']['tag']) is None:
-        doc["tags"] = hit[es_info['mapping']['tag']]
-      if not hit.get("rank") is None:
-        doc["tags"] = hit["rank"]
-      if not hit.get(es_info['mapping']["timestamp"]) is None:
-        doc["timestamp"] = hit[es_info['mapping']["timestamp"]]
+    Parameters:
+        session (json): should have domainId
 
-      docs[hit['url'][0]] = doc
+    Returns:
+        None
+    """
+    es_info = self._esInfo(session['domainId']);
 
-    return docs
+    data_dir = self._path + "/data/"
+    data_domain  = data_dir + es_info['activeDomainIndex']
+    data_training = data_domain + "/training_data/"
+    data_negative = data_domain + "/training_data/negative/"
+    data_positive = data_domain + "/training_data/positive/"
 
-  # Returns most recent downloaded pages.
-  # Returns dictionary in the format:
-  # {
-  #   'last_downloaded_url_epoch': 1432310403 (in seconds)
-  #   'pages': [
-  #             [url1, x, y, tags, retrieved],     (tags are a list, potentially empty)
-  #             [url2, x, y, tags, retrieved],
-  #             [url3, x, y, tags, retrieved],
-  #   ]
-  # }
-  def getPagesProjection(self, session):
-    es_info = self.esInfo(session['domainId'])
-
-    format = '%m/%d/%Y %H:%M %Z'
-    if not session['fromDate'] is None:
-      session['fromDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['fromDate'], format)))
-
-    if not session['toDate'] is None:
-      session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
-
-    hits = self.getPagesQuery(session)
-
-    return self.generatePagesProjection(hits, session)
-
-  def generatePagesProjection(self, hits, session):
-    es_info = self.esInfo(session['domainId'])
-
-    last_downloaded_url_epoch = None
-    docs = []
-
-    for i, hit in enumerate(hits):
-      if last_downloaded_url_epoch is None:
-        if not hit.get(es_info['mapping']['timestamp']) is None:
-          last_downloaded_url_epoch = str(hit[es_info['mapping']['timestamp']][0])
-
-      doc = ["", 0, 0, [], "", ""]
-
-      if not hit.get('url') is None:
-        doc[0] = hit.get('url')
-      if not hit.get('x') is None:
-        doc[1] = hit['x'][0]
-      if not hit.get('y') is None:
-        doc[2] = hit['y'][0]
-      if not hit.get(es_info['mapping']['tag']) is None:
-        doc[3] = hit[es_info['mapping']['tag']]
-      if not hit.get('id') is None:
-        doc[4] = hit['id']
-      if not hit.get(es_info['mapping']["text"]) is None:
-        doc[5] = " ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH])
-
-      if doc[5] != "":
-        docs.append(doc)
-
-    if len(docs) > 1:
-      # Prepares results: computes projection.
-      # Update x, y for pages after projection is done.
-
-      projectionData = self.projectPages(docs, session['activeProjectionAlg'], es_info=es_info)
-
-      last_download_epoch = last_downloaded_url_epoch
-      try:
-        format = '%Y-%m-%dT%H:%M:%S.%f'
-        if '+' in last_downloaded_url_epoch:
-          format = '%Y-%m-%dT%H:%M:%S+0000'
-        last_download_epoch = DomainModel.convert_to_epoch(datetime.strptime(last_downloaded_url_epoch, format))
-      except ValueError:
-        try:
-          format = '%Y-%m-%d %H:%M:%S.%f'
-          last_download_epoch = DomainModel.convert_to_epoch(datetime.strptime(last_downloaded_url_epoch, format))
-        except ValueError:
-          pass
-
-      return {\
-              'last_downloaded_url_epoch':  last_download_epoch,
-              'pages': projectionData
-            }
-    elif len(docs) == 1:
-      doc = docs[0]
-      return {'pages': [[doc[0],1,1,doc[3]]]}
+    if (not isdir(data_positive)):
+      # Create dir if it does not exist
+      makedirs(data_positive)
     else:
-      return {'pages': []}
+      # Remove all previous files
+      for filename in os.listdir(data_positive):
+        os.remove(data_positive+filename)
 
+    if (not isdir(data_negative)):
+      # Create dir if it does not exist
+      makedirs(data_negative)
+    else:
+      # Remove all previous files
+      for filename in os.listdir(data_negative):
+        os.remove(data_negative+filename)
 
-  # Boosts set of pages: domain exploits outlinks for the given set of pages in active domain.
-  def boostPages(self, pages):
-    # TODO(Yamuna): Issue boostPages on running domain defined by active domainId.
-    i = 0
-    print 3 * '\n', 'boosted pages', str(pages), 3 * '\n'
+    pos_tags = "Relevant"
+    neg_tags = "Irrelevant"
+    try:
+      pos_tags = session['model']['positive']
+    except KeyError:
+      print "Using default positive tags"
 
-  # Fetches snippets for a given term.
-  def getTermSnippets(self, term, session):
-    es_info = self.esInfo(session['domainId'])
+    try:
+      neg_tags = session['model']['negative']
+    except KeyError:
+      print "Using default negative tags"
 
-    #tags = get_documents(term, 'term', ['tag'], es_info['activeDomainIndex'], 'terms', self._es)
+    pos_docs = []
+    for tag in pos_tags.split(','):
+      s_fields = {}
+      query = {
+        "wildcard": {es_info['mapping']["tag"]:tag}
+      }
+      s_fields["queries"] = [query]
+      pos_docs = pos_docs + multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
+                                                   es_info['activeDomainIndex'],
+                                                   es_info['docType'],
+                                                   self._es)
+    neg_docs = []
+    for tag in neg_tags.split(','):
+      s_fields = {}
+      query = {
+        "wildcard": {es_info['mapping']["tag"]:tag}
+      }
+      s_fields["queries"] = [query]
+      neg_docs = neg_docs + multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
+                                                   es_info['activeDomainIndex'],
+                                                   es_info['docType'],
+                                                   self._es)
 
+    pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
+    neg_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in neg_docs}
 
-    s_fields = {
-      "term": term,
-      "index": es_info['activeDomainIndex'],
-      "doc_type": es_info['docType'],
-    }
+    seeds_file = data_domain +"/seeds.txt"
+    print "Seeds path ", seeds_file
+    with open(seeds_file, 'w') as s:
+      for url in pos_html:
+        try:
+          file_positive = data_positive + self._encode(url.encode('utf8'))
+          s.write(url.encode('utf8') + '\n')
+          with open(file_positive, 'w') as f:
+            f.write(pos_html[url])
 
-    tags = multifield_term_search(s_fields, self._capTerms, ['tag'], self._termsIndex, 'terms', self._es)
+        except IOError:
+          _, exc_obj, tb = exc_info()
+          f = tb.tb_frame
+          lineno = tb.tb_lineno
+          filename = f.f_code.co_filename
+          linecache.checkcache(filename)
+          line = linecache.getline(filename, lineno, f.f_globals)
+          print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
 
-    tag = []
-    if tags:
-      tag = tags[0]['tag'][0].split(';')
+    for url in neg_html:
+      try:
+        file_negative = data_negative + self._encode(url.encode('utf8'))
+        with open(file_negative, 'w') as f:
+          f.write(neg_html[url])
+      except IOError:
+        _, exc_obj, tb = exc_info()
+        f = tb.tb_frame
+        lineno = tb.tb_lineno
+        filename = f.f_code.co_filename
+        linecache.checkcache(filename)
+        line = linecache.getline(filename, lineno, f.f_globals)
+        print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
 
-    return {'term': term, 'tags': tag, 'context': get_context(term.split('_'), es_info['mapping']['text'], es_info['activeDomainIndex'], es_info['docType'],  self._es)}
+    domainmodel_dir = data_domain + "/models/"
 
-  # Crawl forward
-  def getForwardLinks(self, urls, session):
+    if (not isdir(domainmodel_dir)):
+      makedirs(domainmodel_dir)
 
-    es_info = self.esInfo(session['domainId'])
-
-    results = field_exists("crawled_forward", [es_info['mapping']['url'], "crawled_forward"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
-    already_crawled = [result[es_info["mapping"]["url"]][0] for result in results if result["crawled_forward"][0] == 1]
-    not_crawled = list(Set(urls).difference(already_crawled))
-    results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
-    not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
-
-    chdir(environ['DD_API_HOME']+'/seeds_generator')
-
-    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c forward"\
-           " -u \"" + ",".join(not_crawled_urls) + "\"" + \
-           " -t " + session["pagesCap"] + \
-           " -i " + es_info['activeDomainIndex'] + \
-           " -d " + es_info['docType'] + \
-           " -s " + es_server
-
-    p=Popen(comm, shell=True, stderr=PIPE)
+    ache_home = environ['ACHE_HOME']
+    comm = ache_home + "/bin/ache buildModel -t " + data_training + " -o "+ domainmodel_dir + " -c " + ache_home + "/config/stoplist.txt"
+    p = Popen(comm, shell=True, stderr=PIPE)
     output, errors = p.communicate()
     print output
     print errors
 
-  # Crawl backward
-  def getBackwardLinks(self, urls, session):
+    if zip:
+      zip_filename = data_domain + es_info['activeDomainIndex'] + "_model.zip"
+      with ZipFile(zip_filename, "w") as modelzip:
+        if (isfile(domainmodel_dir + "/pageclassifier.features")):
+          print "zipping file: "+domainmodel_dir + "/pageclassifier.features"
+          modelzip.write(domainmodel_dir + "/pageclassifier.features", "pageclassifier.features")
 
-    es_info = self.esInfo(session['domainId'])
+        if (isfile(domainmodel_dir + "/pageclassifier.model")):
+          print "zipping file: "+domainmodel_dir + "/pageclassifier.model"
+          modelzip.write(domainmodel_dir + "/pageclassifier.model", "pageclassifier.model")
 
-    results = field_exists("crawled_backward", [es_info['mapping']['url']], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
-    already_crawled = [result[es_info["mapping"]["url"]][0] for result in results]
-    not_crawled = list(Set(urls).difference(already_crawled))
-    results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
-    not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
+        if (exists(data_domain + "/training_data/positive")):
+          print "zipping file: "+ data_domain + "/training_data/positive"
+          for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/positive"):
+            for html_file in filenames:
+              modelzip.write(dirpath + "/" + html_file, "training_data/positive/" + html_file)
 
-    chdir(environ['DD_API_HOME']+'/seeds_generator')
+        if (exists(data_domain + "/training_data/negative")):
+          print "zipping file: "+ data_domain + "/training_data/negative"
+          for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/negative"):
+            for html_file in filenames:
+              modelzip.write(dirpath + "/" + html_file, "training_data/negative/" + html_file)
 
-    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c backward"\
-           " -u \"" + ",".join(not_crawled_urls) + "\"" + \
-           " -t " + session["pagesCap"] + \
-           " -i " + es_info['activeDomainIndex'] + \
-           " -d " + es_info['docType'] + \
-           " -s " + es_server
+        if (isfile(data_domain +"/seeds.txt")):
+          print "zipping file: "+data_domain +"/seeds.txt"
+          modelzip.write(data_domain +"/seeds.txt", es_info['activeDomainIndex'] + "_seeds.txt")
 
-    p=Popen(comm, shell=True, stderr=PIPE)
-    output, errors = p.communicate()
-    print output
-    print errors
+        chmod(zip_filename, 0o777)
 
-  def _removeClassifierSample(self, domainId, sampleId):
-    if self._onlineClassifiers.get(domainId) != None:
-      try:
-        self._onlineClassifiers[domainId]["trainedPosSamples"].remove(sampleId)
-      except ValueError:
-        pass
-      try:
-        self._onlineClassifiers[domainId]["trainedNegSamples"].remove(sampleId)
-      except ValueError:
-        pass
-
-  # Adds tag tow pages (if applyTagFlag is True) or removes tag from pages (if applyTagFlag is
-  # False).
-  def setPagesTag(self, pages, tag, applyTagFlag, session):
-    es_info = self.esInfo(session['domainId'])
-
-    entries = {}
-    results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
-
-    if applyTagFlag and len(results) > 0:
-      print '\n\napplied tag ' + tag + ' to pages' + str(pages) + '\n\n'
-
-      for page in pages:
-        if not results.get(page) is None:
-          # pages to be tagged exist
-          records = results[page]
-          for record in records:
-            entry = {}
-            if record.get(es_info['mapping']['tag']) is None:
-              # there are no previous tags
-              entry[es_info['mapping']['tag']] = [tag]
-              entry["unsure_tag"] = 0
-              entry["label_pos"] = 0
-              entry["label_neg"] = 0
-            else:
-              tags = record[es_info['mapping']['tag']]
-              if len(tags) != 0:
-                # previous tags exist
-                if not tag in tags:
-                  # append new tag
-                  tags.append(tag)
-                  entry[es_info['mapping']['tag']] = tags
-                  entry["unsure_tag"] = 0
-                  entry["label_pos"] = 0
-                  entry["label_neg"] = 0
-
-                  self._removeClassifierSample(session['domainId'], record['id'])
-              else:
-                # add new tag
-                entry[es_info['mapping']['tag']] = [tag]
-                entry["unsure_tag"] = 0
-                entry["label_pos"] = 0
-                entry["label_neg"] = 0
-
-            if entry:
-                  entries[record['id']] =  entry
-
-    elif len(results) > 0:
-      print '\n\nremoved tag ' + tag + ' from pages' + str(pages) + '\n\n'
-
-      for page in pages:
-        if not results.get(page) is None:
-          records = results[page]
-          for record in records:
-            entry = {}
-            if not record.get(es_info['mapping']['tag']) is None:
-              tags = record[es_info['mapping']['tag']]
-              if tag in tags:
-                tags.remove(tag)
-                entry[es_info['mapping']['tag']] = tags
-                entries[record['id']] = entry
-
-
-    if entries:
-      update_try = 0
-      while (update_try < 10):
-        try:
-          update_document(entries, es_info['activeDomainIndex'], es_info['docType'], self._es)
-          break
-        except:
-          update_try = update_try + 1
-
-      if (session['domainId'] in self._onlineClassifiers) and (not applyTagFlag) and (tag in ["Relevant", "Irrelevant"]):
-        self._onlineClassifiers.pop(session['domainId'])
-
-    return "Completed Process."
-
-  # Adds tag to terms (if applyTagFlag is True) or removes tag from terms (if applyTagFlag is
-  # False).
-  def setTermsTag(self, terms, tag, applyTagFlag, session):
-    # TODO(Yamuna): Apply tag to page and update in elastic search. Suggestion: concatenate tags
-    # with semi colon, removing repetitions.
-
-    es_info = self.esInfo(session['domainId'])
-
-    s_fields = {
-      "term": "",
-      "index": es_info['activeDomainIndex'],
-      "doc_type": es_info['docType'],
-    }
-
-    tags = []
-    for term in terms:
-      s_fields["term"] = term
-      res = multifield_term_search(s_fields, 1, ['tag'], self._termsIndex, 'terms', self._es)
-      tags.extend(res)
-
-    results = {result['id']: result['tag'][0] for result in tags}
-
-    add_entries = []
-    update_entries = {}
-
-    if applyTagFlag:
-      for term in terms:
-        if len(results) > 0:
-          if results.get(term) is None:
-            entry = {
-              "term" : term,
-              "tag" : tag,
-              "index": es_info['activeDomainIndex'],
-              "doc_type": es_info['docType'],
-              "_id" : term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']
-            }
-            add_entries.append(entry)
-          else:
-            old_tag = results[term]
-            if tag not in old_tag:
-              entry = {
-                "term" : term,
-                "tag" : tag,
-                "index": es_info['activeDomainIndex'],
-                "doc_type": es_info['docType'],
-              }
-              update_entries[term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']] = entry
-        else:
-          entry = {
-            "term" : term,
-            "tag" : tag,
-            "index": es_info['activeDomainIndex'],
-            "doc_type": es_info['docType'],
-            "_id": term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']
-          }
-          add_entries.append(entry)
+      return "models/" + es_info['activeDomainIndex'] + "_model.zip"
     else:
-      for term in terms:
-        if len(results) > 0:
-          if not results.get(term) is None:
-            if tag in results[term]:
-              entry = {
-                "term" : term,
-                "tag" : "",
-                "index": es_info['activeDomainIndex'],
-                "doc_type": es_info['docType']
-              }
-              update_entries[term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']] = entry
+      return None
 
-    if add_entries:
-      add_document(add_entries, self._termsIndex, 'terms', self._es)
 
-    if update_entries:
-      update_document(update_entries, self._termsIndex, 'terms', self._es)
-
-  # Update online classifer
   def updateOnlineClassifier(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     onlineClassifier = None
     trainedPosSamples = []
@@ -1528,11 +1774,23 @@ class DomainModel(object):
 
     return accuracy
 
+  def _removeClassifierSample(self, domainId, sampleId):
+    if self._onlineClassifiers.get(domainId) != None:
+      try:
+        self._onlineClassifiers[domainId]["trainedPosSamples"].remove(sampleId)
+      except ValueError:
+        pass
+      try:
+        self._onlineClassifiers[domainId]["trainedNegSamples"].remove(sampleId)
+      except ValueError:
+        pass
+
+
   def predictUnlabeled(self, session):
     # Label unlabelled data
 
     #TODO: Move this to Model tab functionality
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
 
     #self.updateOnlineClassifier(session)
 
@@ -1617,117 +1875,10 @@ class DomainModel(object):
         neg_indices = np.where(classp == 0)
 
 
-  # Delete terms from term window and from the ddt_terms index
-  def deleteTerm(self,term, session):
-    es_info = self.esInfo(session['domainId'])
-    delete([term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']], self._termsIndex, "terms", self._es)
-
-  # Add domain
-  def addDomain(self, index_name):
-
-    create_index(index_name, es=self._es)
-
-    fields = index_name.lower().split(' ')
-    index = '_'.join([item for item in fields if item not in ''])
-    index_name = ' '.join([item for item in fields if item not in ''])
-    entry = { "domain_name": index_name.title(),
-              "index": index,
-              "doc_type": "page",
-              "timestamp": datetime.utcnow(),
-            }
-
-    load_config([entry])
-
-  # Delete domain
-  def delDomain(self, domains):
-
-    for index in domains.values():
-      # Delete Index
-      delete_index(index, self._es)
-      # Delete terms tagged for the index
-      ddt_terms_keys = [doc["id"] for doc in term_search("index", [index], self._all, ["term"], "ddt_terms", "terms", self._es)]
-      delete_document(ddt_terms_keys, "ddt_terms", "terms", self._es)
-
-    # Delete indices from config index
-    delete_document(domains.keys(), "config", "domains", self._es)
-
-  def updateColors(self, session, colors):
-    es_info = self.esInfo(session['domainId'])
-
-    entry = {
-      session['domainId']: {
-        "colors": colors["colors"],
-        "index": colors["index"]
-      }
-    }
-
-    update_document(entry, "config", "tag_colors", self._es)
-
-  def getTagColors(self, domainId):
-    tag_colors = get_tag_colors(self._es).get(domainId)
-
-    colors = None
-    if tag_colors is not None:
-      colors = {"index": tag_colors["index"]}
-      colors["colors"] = {}
-      for color in tag_colors["colors"]:
-        fields  = color.split(";")
-        colors["colors"][fields[0]] = fields[1]
-
-    return colors
-
-  # Submits a web query for a list of terms, e.g. 'ebola disease'
-  def queryWeb(self, terms, max_url_count = 100, session = None):
-    # TODO(Yamuna): Issue query on the web: results are stored in elastic search, nothing returned
-    # here.
-    es_info = self.esInfo(session['domainId'])
-
-    chdir(environ['DD_API_HOME']+'/seeds_generator')
-
-    if(int(session['pagesCap']) <= max_url_count):
-      top = int(session['pagesCap'])
-    else:
-      top = max_url_count
-
-    if 'GOOG' in session['search_engine']:
-      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -t " + str(top) + \
-             " -q \"" + terms + "\"" + \
-             " -i " + es_info['activeDomainIndex'] + \
-             " -d " + es_info['docType'] + \
-             " -s " + es_server
-
-    elif 'BING' in session['search_engine']:
-      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar BingSearch -t " + str(top) + \
-             " -q \"" + terms + "\"" + \
-             " -i " + es_info['activeDomainIndex'] + \
-             " -d " + es_info['docType'] + \
-             " -s " + es_server
-
-
-    p=Popen(comm, shell=True, stdout=PIPE)
-    output, errors = p.communicate()
-    print "\n\n\n QUERY WEB OUTPUT \n", "\n",output,"\n\n\n"
-    print "\n\n\n QUERY WEB ERRORS \n", errors,"\n\n\n"
-
-    num_pages = self.getNumPagesDownloaded(output)
-
-    return {"pages":num_pages}
-
-  def getNumPagesDownloaded(self, output):
-    index = output.index("Number of results:")
-    n_pages = output[index:]
-    n = int(n_pages.split(":")[1])
-    return n
-
-  # Download the pages of uploaded urls
-  def downloadUrls(self, urls_str, session):
-    es_info = self.esInfo(session['domainId'])
-
-    output = callDownloadUrls("uploaded", None, urls_str, es_info)
-    return output
+#######################################################################################################
 
   def getPlottingData(self, session):
-    es_info = self.esInfo(session['domainId'])
+    es_info = self._esInfo(session['domainId'])
     return get_plotting_data(self._all, es_info["activeDomainIndex"], es_info['docType'], self._es)
 
   # Projects pages.
@@ -1850,45 +2001,3 @@ class DomainModel(object):
     delta = dt - epoch
     return delta.total_seconds()
 
-  def make_topic_model(self, session, tokenizer, vectorizer, model, ntopics):
-    """Build topic model from the corpus of the supplied DDT domain.
-
-    The topic model is represented as a topik.TopikProject object, and is
-    persisted in disk, recording the model parameters and the location of the
-    data. The output of the topic model itself is stored in Elasticsearch.
-
-    Parameters
-    ----------
-    domain: str
-        DDT domain name as stored in Elasticsearch, so lowercase and with underscores in place of spaces.
-    tokenizer: str
-        A tokenizer from ``topik.tokenizer.registered_tokenizers``
-    vectorizer: str
-        A vectorization method from ``topik.vectorizers.registered_vectorizers``
-    model: str
-        A topic model from ``topik.vectorizers.registered_models``
-    ntopics: int
-        The number of topics to be used when modeling the corpus.
-
-    Returns
-    -------
-    model: a topik topic model
-        A topik model, encoding things like term frequencies, etc.
-    """
-    es_info = self.esInfo(session['domainId'])
-    content_field = self._mapping['text']
-
-    def not_empty(doc): return bool(doc[content_field][0])  # True if document not empty
-
-    raw_data = filter(not_empty, get_all_ids(fields=['text'], es_index=es_info['activeDomainIndex'], es = self._es))
-
-    id_doc_pairs = ((hash(__[content_field][0]), __[content_field][0]) for __ in raw_data)
-
-    def not_empty_tokens(toks): return bool(toks[1])  # True if document not empty
-
-    tokens = filter(not_empty_tokens, tokenize(id_doc_pairs, method=tokenizer))
-
-    vectors = vectorize(tokens, method=vectorizer)
-    model = run_model(vectors, model_name=model, ntopics=ntopics)
-
-    return {"model": model, "domain": es_info['activeDomainIndex']}
