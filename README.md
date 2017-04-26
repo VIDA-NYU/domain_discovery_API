@@ -27,7 +27,7 @@ Now you can use the API
 
 ## Documentation
 
-More documentation is available [HERE!](http://domain-discovery-api.readthedocs.io/en/dd_api_docs/)
+More documentation is available [HERE!](http://domain-discovery-api.readthedocs.io/en/latest/)
 
 ## Contact
 
