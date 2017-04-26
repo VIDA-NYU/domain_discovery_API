@@ -103,7 +103,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'dd_apidoc'
+htmlhelp_basename = 'Domain Discovery API'
 
 
 # -- Options for LaTeX output ---------------------------------------------
