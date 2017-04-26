@@ -186,6 +186,7 @@ public class Download_URL implements Runnable {
 	    HttpClientBuilder.create().setDefaultRequestConfig(config).build();
 	
 	URI url = request.getURI();
+	String domain = url.getHost();
 
 	HttpResponse response = null;
 	try{
@@ -263,6 +264,7 @@ public class Download_URL implements Runnable {
 
 			if(hits.length == 0){
 			    jobj.field("url", url);
+			    jobj.field("domain", domain);
 			    
 			    jobj.field("query", new String[]{this.query});
 
