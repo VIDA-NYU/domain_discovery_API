@@ -74,7 +74,7 @@ class DomainModel(object):
     create_config_index()
     create_terms_index()
 
-    self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query"}
+    self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain"}
     self._domains = None
     self._onlineClassifiers = {}
     self._pos_tags = ['NN', 'NNS', 'NNP', 'NNPS', 'FW', 'JJ']
@@ -1304,6 +1304,70 @@ class DomainModel(object):
     return hits
 
 
+  def _getPagesForMultiCriteria(self, session):
+    es_info = self._esInfo(session['domainId'])
+
+    s_fields = {}
+    s_fields_aux = {}
+    if not session['filter'] is None:
+      s_fields[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
+      s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
+
+    if not session['fromDate'] is None:
+      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+      s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+
+    hits=[]
+    n_criteries = session['pageRetrievelCriteria'].keys()
+    for criteria in n_criteries:
+        if criteria != "":
+            if criteria == "Queries":
+                queries = session['selected_queries'].split(',')
+            elif criteria == "Tags":
+                tags = session['selected_tags'].split(',')
+
+    for query in queries:
+        for tag in tags:
+            if tag != "":
+                if tag == "Neutral":
+                    query_aux = "(" + "query" + ":" + query + ")"
+                    query_field_missing = {
+                        "filtered" : {
+                          "query": {
+                              "query_string": {
+                                  "query": query_aux
+                              }
+                          },
+                          "filter" : {
+                            "missing" : { "field" : "tag" }
+                          }
+                        }
+                    }
+
+                    s_fields_aux["queries"] = [query_field_missing]
+
+                    results = multifield_term_search(s_fields_aux, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                            es_info['activeDomainIndex'],
+                                            es_info['docType'],
+                                            self._es)
+
+                else:
+                    s_fields[es_info['mapping']['tag']] = '"' + tag + '"'
+                    s_fields[es_info['mapping']["query"]] = '"' + query + '"'
+                    results= multifield_query_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                            es_info['activeDomainIndex'],
+                                            es_info['docType'],
+                                            self._es)
+                if session['selected_morelike']=="moreLike":
+                    aux_result = self._getMoreLikePagesAll(session, results)
+                    hits.extend(aux_result)
+                else:
+                    hits.extend(results)
+
+
+    return hits
+
+  
   def _getPagesForQueries(self, session):
     es_info = self._esInfo(session['domainId'])
 
@@ -1332,6 +1396,34 @@ class DomainModel(object):
         hits.extend(results)
     return hits
 
+  def _getPagesForTLDs(self, session):
+    es_info = self._esInfo(session['domainId'])
+
+    s_fields = {}
+    if not session['filter'] is None:
+      s_fields[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
+
+    if not session['fromDate'] is None:
+      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+
+    hits=[]
+    tlds = session['selected_tlds'].split(',')
+
+    for tld in tlds:
+      s_fields[es_info['mapping']['domain']] = '"' + tld + '"'
+      results= multifield_query_search(s_fields,
+                                       session['pagesCap'],
+                                       ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
+                                       es_info['activeDomainIndex'],
+                                       es_info['docType'],
+                                       self._es)
+      if session['selected_morelike']=="moreLike":
+        aux_result = self._getMoreLikePagesAll(session, results)
+        hits.extend(aux_result)
+      else:
+        hits.extend(results)
+    return hits
+  
   def _getPagesForTags(self, session):
     es_info = self._esInfo(session['domainId'])
 
@@ -1468,10 +1560,12 @@ class DomainModel(object):
       hits = self._getMostRecentPages(session)
     elif (session.get('pageRetrievalCriteria') == 'More like'):
       hits = self._getMoreLikePages(session)
-    elif (session.get('newPageRetrievelCriteria') == 'Queries,Tags,'):
-       hits = self._getPagesForQueriesTags(session)
+    elif (session.get('newPageRetrievelCriteria') == 'Multi'):
+       hits = self._getPagesForMultiCriteria(session)
     elif (session.get('pageRetrievalCriteria') == 'Queries'):
       hits = self._getPagesForQueries(session)
+    elif (session.get('pageRetrievalCriteria') == 'TLDs'):
+      hits = self._getPagesForTLDs(session)
     elif (session.get('pageRetrievalCriteria') == 'Tags'):
       hits = self._getPagesForTags(session)
     elif (session.get('pageRetrievalCriteria') == 'Model Tags'):
