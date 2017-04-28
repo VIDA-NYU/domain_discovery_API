@@ -212,6 +212,7 @@ class Page(object):
   @cherrypy.expose
   def getPages(self, session):
     session = json.loads(session)
+    print "\n\n\n SERVER ",session,"\n\n\n"
     data = self._model.getPages(session)
     colors = self._model.getTagColors(session['domainId'])
     res = {"data": data}#//, "plot": selection_plot(data, colors)}

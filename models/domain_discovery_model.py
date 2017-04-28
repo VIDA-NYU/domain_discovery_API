@@ -1307,6 +1307,8 @@ class DomainModel(object):
   def _getPagesForMultiCriteria(self, session):
     es_info = self._esInfo(session['domainId'])
 
+    print "\n\nMULTI CRITERIA\n"
+    
     s_fields = {}
     s_fields_aux = {}
     if not session['filter'] is None:
@@ -1318,52 +1320,28 @@ class DomainModel(object):
       s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
     hits=[]
-    n_criteries = session['pageRetrievelCriteria'].keys()
-    for criteria in n_criteries:
-        if criteria != "":
-            if criteria == "Queries":
-                queries = session['selected_queries'].split(',')
-            elif criteria == "Tags":
-                tags = session['selected_tags'].split(',')
+    n_criteria = session['pageRetrievelCriteria'].keys()
+    n_criteria_vals = session['pageRetrievelCriteria'].keys()
 
-    for query in queries:
-        for tag in tags:
-            if tag != "":
-                if tag == "Neutral":
-                    query_aux = "(" + "query" + ":" + query + ")"
-                    query_field_missing = {
-                        "filtered" : {
-                          "query": {
-                              "query_string": {
-                                  "query": query_aux
-                              }
-                          },
-                          "filter" : {
-                            "missing" : { "field" : "tag" }
-                          }
-                        }
-                    }
-
-                    s_fields_aux["queries"] = [query_field_missing]
-
-                    results = multifield_term_search(s_fields_aux, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                            es_info['activeDomainIndex'],
-                                            es_info['docType'],
-                                            self._es)
-
-                else:
-                    s_fields[es_info['mapping']['tag']] = '"' + tag + '"'
-                    s_fields[es_info['mapping']["query"]] = '"' + query + '"'
-                    results= multifield_query_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                            es_info['activeDomainIndex'],
-                                            es_info['docType'],
-                                            self._es)
-                if session['selected_morelike']=="moreLike":
-                    aux_result = self._getMoreLikePagesAll(session, results)
-                    hits.extend(aux_result)
-                else:
-                    hits.extend(results)
-
+    criteria_comb = product(*n_criteria_vals)
+    for criteria in criteria_comb:
+      i = 0
+      for criterion in criteria:
+        n_criterion = n_criteria[i]
+        if n_criterion == 'tag' and tag == "Neutral":
+          s_fields["filter"] = {
+            "missing" : { "field" : "tag" }
+          }
+        s_fields[n_criterion] = '"' + criterion + '"'
+      results= multifield_query_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                       es_info['activeDomainIndex'],
+                                       es_info['docType'],
+                                       self._es)
+      if session['selected_morelike']=="moreLike":
+        morelike_result = self._getMoreLikePagesAll(session, results)
+        hits.extend(morelike_result)
+      else:
+        hits.extend(results)
 
     return hits
 

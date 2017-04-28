@@ -103,9 +103,13 @@ def multifield_term_search(s_fields, pageCount=100, fields=[], es_index='memex',
         es = default_es
         
     queries = []
+    filter_q = None
+    
     for k,v in s_fields.items():
         if "queries" in k:
             queries.extend(v)
+        if "filter" in k:
+            filter_q = v
         else:
             query = {
                 "match": {
@@ -126,6 +130,9 @@ def multifield_term_search(s_fields, pageCount=100, fields=[], es_index='memex',
         },
         "fields": fields
     }
+
+    if filter_q is not None:
+        query["filter"] = filter_q
 
     res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pageCount)
     hits = res['hits']['hits']
