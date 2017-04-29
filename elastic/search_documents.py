@@ -134,6 +134,8 @@ def multifield_term_search(s_fields, pageCount=100, fields=[], es_index='memex',
     if filter_q is not None:
         query["filter"] = filter_q
 
+    print "\n\n\n MULTIFIELD TERM SEARCH \n", query,"\n\n\n"
+    
     res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pageCount)
     hits = res['hits']['hits']
     

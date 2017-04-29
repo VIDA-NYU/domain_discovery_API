@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from dateutil import tz
 from sets import Set
+from itertools import product
 import json;
 
 from sklearn.decomposition import PCA
@@ -1254,7 +1255,7 @@ class DomainModel(object):
       s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
     hits=[]
-    n_criteries = session['newPageRetrievelCriteria'].split(',')
+    n_criteries = session['newPageRetrievalCriteria'].split(',')
     for criteria in n_criteries:
         if criteria != "":
             if criteria == "Queries":
@@ -1320,29 +1321,39 @@ class DomainModel(object):
       s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
     hits=[]
-    n_criteria = session['pageRetrievelCriteria'].keys()
-    n_criteria_vals = session['pageRetrievelCriteria'].keys()
+    n_criteria = session['pageRetrievalCriteria'].keys()
+    n_criteria_vals = [val.split(",") for val in session['pageRetrievalCriteria'].values()]
 
-    criteria_comb = product(*n_criteria_vals)
+    print "\n\n\n  n_criteria_vals",  n_criteria_vals,"\n\n\n"
+
+    criteria_comb = product(*[range(0,len(val)) for val in n_criteria_vals])
+
+    print "\n\n\n  criteria_comb",  criteria_comb,"\n\n\n"
+    
     for criteria in criteria_comb:
+      print "\n\n\n  criteria",  criteria,"\n\n\n"
       i = 0
-      for criterion in criteria:
+      for criterion_index in criteria:
+        criterion = n_criteria_vals[i][criterion_index]
+        print "\n\n\n  criterion",criterion,"\n\n\n"
         n_criterion = n_criteria[i]
-        if n_criterion == 'tag' and tag == "Neutral":
+        if n_criterion == 'tag' and criterion == "Neutral":
           s_fields["filter"] = {
             "missing" : { "field" : "tag" }
           }
-        s_fields[n_criterion] = '"' + criterion + '"'
-      results= multifield_query_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                       es_info['activeDomainIndex'],
-                                       es_info['docType'],
-                                       self._es)
-      if session['selected_morelike']=="moreLike":
-        morelike_result = self._getMoreLikePagesAll(session, results)
-        hits.extend(morelike_result)
-      else:
-        hits.extend(results)
-
+        else:
+          s_fields[n_criterion] =  criterion 
+        i = i+1
+    results= multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                     es_info['activeDomainIndex'],
+                                     es_info['docType'],
+                                     self._es)
+    if session['selected_morelike']=="moreLike":
+      morelike_result = self._getMoreLikePagesAll(session, results)
+      hits.extend(morelike_result)
+    else:
+      hits.extend(results)
+            
     return hits
 
   
@@ -1538,7 +1549,7 @@ class DomainModel(object):
       hits = self._getMostRecentPages(session)
     elif (session.get('pageRetrievalCriteria') == 'More like'):
       hits = self._getMoreLikePages(session)
-    elif (session.get('newPageRetrievelCriteria') == 'Multi'):
+    elif (session.get('newPageRetrievalCriteria') == 'Multi'):
        hits = self._getPagesForMultiCriteria(session)
     elif (session.get('pageRetrievalCriteria') == 'Queries'):
       hits = self._getPagesForQueries(session)
