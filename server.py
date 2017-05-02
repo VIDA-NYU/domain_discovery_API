@@ -103,6 +103,14 @@ class Page(object):
     return json.dumps(result)
 
   @cherrypy.expose
+  def getAnnotatedTerms(self, session):
+    session = json.loads(session)
+    result = self._model.getAnnotatedTerms(session)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(result)
+
+
+  @cherrypy.expose
   def getTagColors(self, domainId):
     res = self._model.getTagColors(domainId)
     cherrypy.response.headers["Content-Type"] = "application/json;"
@@ -285,7 +293,7 @@ class Page(object):
   def deleteTerm(self, term, session):
     session = json.loads(session)
     self._model.deleteTerm(term, session)
-
+  
   # Download the pages of uploaded urls
   @cherrypy.expose
   def uploadUrls(self, urls, session):

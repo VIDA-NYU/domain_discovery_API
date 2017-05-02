@@ -337,13 +337,33 @@ class DomainModel(object):
     if tags:
       tag = tags[0]['tag'][0].split(';')
 
-    return {'term': term, 'tags': tag, 'context': get_context(term.split('_'), es_info['mapping']['text'], es_info['activeDomainIndex'], es_info['docType'],  self._es)}
+    return {'term': term, 'tags': tag, 'context': get_context(term.split('_'), es_info['mapping']['text'], 500, es_info['activeDomainIndex'], es_info['docType'],  self._es)}
 
   # Delete terms from term window and from the ddt_terms index
   def deleteTerm(self,term, session):
     es_info = self._esInfo(session['domainId'])
     delete([term+'_'+es_info['activeDomainIndex']+'_'+es_info['docType']], self._termsIndex, "terms", self._es)
 
+  def getAnnotatedTerms(self, session):
+    es_info = self._esInfo(session['domainId'])
+
+    s_fields = {
+      "index": es_info['activeDomainIndex'],
+      "doc_type": es_info['docType']
+    }
+
+    hits = multifield_term_search(s_fields, self._all, ['tag','term'], self._termsIndex, 'terms', self._es)
+
+    print hits
+    
+    result = {}
+    for hit in hits:
+      term = hit['term'][0]
+      result[term] = {'tag':hit['tag'][0]}
+      
+    print "\n\n\n GET ANNOTATED TERMs", result.keys(),"\n\n\n"
+    return result
+                      
   # Add domain
   def addDomain(self, index_name):
 
