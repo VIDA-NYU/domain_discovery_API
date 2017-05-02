@@ -174,7 +174,7 @@ def get_image(url, es_index='memex', es_doc_type='page', es=None):
             print "No thumbnail found"
     return [None, None]
 
-def get_context(terms, field = "text", es_index='memex', es_doc_type='page', es=None):
+def get_context(terms, field = "text", size=500, es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
 
@@ -198,7 +198,7 @@ def get_context(terms, field = "text", es_index='memex', es_doc_type='page', es=
             "fields": ["url"]
         }
 
-        res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=500, request_timeout=600)
+        res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=size, request_timeout=600)
         hits = res['hits']
 
         context = {}
