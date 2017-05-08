@@ -52,7 +52,7 @@ def multifield_query_search(s_fields, pageCount=100, fields = [], es_index='meme
         }
 
         res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pageCount, request_timeout=600)
-        
+
         hits = res['hits']['hits']
 
         results = []
@@ -94,20 +94,23 @@ def term_search(field, queryStr, pageCount=100, fields=[], es_index='memex', es_
                 fields = hit['fields']
                 fields['id'] = hit['_id']
                 results.append(fields)
-            
+
         return results
 
 
 def multifield_term_search(s_fields, pageCount=100, fields=[], es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
-        
+
+    query = {}
     queries = []
     for k,v in s_fields.items():
         if "queries" in k:
             queries.extend(v)
+        elif "filter" in k:
+            query["filter"] = v
         else:
-            query = {
+            match_query = {
                 "match": {
                     k: {
                         "query": v,
@@ -115,27 +118,25 @@ def multifield_term_search(s_fields, pageCount=100, fields=[], es_index='memex',
                     }
                 }
             }
-            queries.append(query)
-            
-    query = {
-        "query" : {
+            queries.append(match_query)
+
+    query["query"] =  {
             "bool": {
                 "should": queries,
                 "minimum_number_should_match": len(queries)
             }
-        },
-        "fields": fields
-    }
+        }
+    query["fields"] = fields
 
     res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pageCount)
     hits = res['hits']['hits']
-    
+
     results = []
     for hit in hits:
         fields = hit['fields']
         fields['id'] = hit['_id']
         results.append(fields)
-        
+
     return results
 
 def get_image(url, es_index='memex', es_doc_type='page', es=None):
@@ -171,7 +172,7 @@ def get_context(terms, field = "text", es_index='memex', es_doc_type='page', es=
 
     if len(terms) > 0:
         query = {
-            "query": { 
+            "query": {
                 "match": {
                     field: {
                         "query": ' '.join(terms[0:]),
@@ -205,10 +206,10 @@ def range_search(field, from_val, to_val, ret_fields=[], epoch=True, pagesCount 
     if epoch:
         from_val = datetime.utcfromtimestamp(long(from_val)).strftime('%Y-%m-%dT%H:%M:%S')
         to_val = datetime.utcfromtimestamp(long(to_val)).strftime('%Y-%m-%dT%H:%M:%S')
-            
-    query = { 
-        "query" : { 
-            "range" : { 
+
+    query = {
+        "query" : {
+            "range" : {
                 field : {
                     "gt": from_val,
                     "lte": to_val
@@ -220,7 +221,7 @@ def range_search(field, from_val, to_val, ret_fields=[], epoch=True, pagesCount 
 
     res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pagesCount, request_timeout=600)
     hits = res['hits']['hits']
-    
+
     results = []
     for hit in hits:
         fields = hit['fields']
@@ -246,7 +247,7 @@ def field_missing(field, fields, pagesCount, es_index='memex', es_doc_type='page
 
     res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pagesCount, request_timeout=600)
     hits = res['hits']['hits']
-    
+
     results = []
     for hit in hits:
         if hit.get('fields') != None:
@@ -276,7 +277,7 @@ def field_exists(field, fields, pagesCount, es_index='memex', es_doc_type='page'
 
     res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pagesCount)
     hits = res['hits']['hits']
-    
+
     results = []
     for hit in hits:
         fields = hit['fields']
@@ -294,7 +295,7 @@ def exec_query(query, fields, pagesCount, es_index='memex', es_doc_type='page', 
 
     res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pagesCount)
     hits = res['hits']['hits']
-    
+
     results = []
     for hit in hits:
         fields = hit['fields']
@@ -320,4 +321,3 @@ if __name__ == "__main__":
             if 'False' in sys.argv[6]:
                 epoch = False
         print range(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5].split(','), epoch, es_index='memex')
-
