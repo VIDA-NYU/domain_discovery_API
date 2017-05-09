@@ -58,7 +58,7 @@ public class Download_URL implements Runnable {
     String es_doc_type = "page";
     String es_host = "";
     Client client = null;
-    Integer timeout = 10; 
+    Integer timeout = 5; 
 	
     public Download_URL(JSONObject url_info, String query, String subquery, String es_index, String es_doc_type, Client client){
 	try{
