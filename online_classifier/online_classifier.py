@@ -24,12 +24,12 @@ class OnlineClassifier:
         clf = linear_model.SGDClassifier(n_iter=1)
         try:
             clf.fit(X, Y)
+            self.clf = clf
+            return clf
         except ValueError as verr:
             print("Value error: {0}".format(verr))
             return None
-        self.clf = clf
-        return clf
-
+        
     def partialFit(self, X, Y):
         if self.clf is None:
             self.fit(X, Y)
