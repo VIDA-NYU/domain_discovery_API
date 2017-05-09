@@ -174,6 +174,8 @@ class DomainModel(object):
   def getAvailableModelTags(self, session):
     es_info = self._esInfo(session['domainId'])
 
+    self.predictUnlabeled(session)
+    
     unsure_tags = self._getUnsureLabelPages(session)
     unique_tags = {"Unsure": len(unsure_tags)}
 
@@ -1617,7 +1619,7 @@ class DomainModel(object):
 
   def updateOnlineClassifier(self, session):
     es_info = self._esInfo(session['domainId'])
-
+    
     onlineClassifier = None
     trainedPosSamples = []
     trainedNegSamples = []
@@ -1693,17 +1695,17 @@ class DomainModel(object):
     clf = None
     train_data = None
     if pos_text or neg_text:
-      self._onlineClassifiers[session['domainId']]["trainedPosSamples"] = self._onlineClassifiers[session['domainId']]["trainedPosSamples"] + pos_ids
-      self._onlineClassifiers[session['domainId']]["trainedNegSamples"] = self._onlineClassifiers[session['domainId']]["trainedNegSamples"] + neg_ids
       [train_data,_] = self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(pos_text+neg_text)
-      self._onlineClassifiers[session['domainId']]["onlineClassifier"].partialFit(train_data, pos_labels+neg_labels)
-
+      clf = self._onlineClassifiers[session['domainId']]["onlineClassifier"].partialFit(train_data, pos_labels+neg_labels)
+      if clf != None:
+        self._onlineClassifiers[session['domainId']]["trainedPosSamples"] = self._onlineClassifiers[session['domainId']]["trainedPosSamples"] + pos_ids
+        self._onlineClassifiers[session['domainId']]["trainedNegSamples"] = self._onlineClassifiers[session['domainId']]["trainedNegSamples"] + neg_ids
+      
     # ****************************************************************************************
 
     # Fit calibratrated classifier
 
-
-    if train_data != None:
+    if train_data != None and clf != None:
 
       trainedPosSamples = self._onlineClassifiers[session['domainId']]["trainedPosSamples"]
       trainedNegSamples = self._onlineClassifiers[session['domainId']]["trainedNegSamples"]
@@ -1785,6 +1787,11 @@ class DomainModel(object):
     label_neg = 0
     unlabeled_urls = []
 
+    MAX_SAMPLE = 1000
+
+    if self._onlineClassifiers.get(session['domainId']) == None:
+      return
+    
     sigmoid = self._onlineClassifiers[session['domainId']].get("sigmoid")
     if sigmoid != None:
       unlabelled_docs = field_missing(es_info["mapping"]["tag"], ["url", es_info["mapping"]["text"]], self._all,
@@ -1792,8 +1799,8 @@ class DomainModel(object):
                                       es_info['docType'],
                                       self._es)
 
-      if len(unlabelled_docs) > 2000:
-        unlabelled_docs = sample(unlabelled_docs, 2000)
+      if len(unlabelled_docs) > MAX_SAMPLE:
+        unlabelled_docs = sample(unlabelled_docs, MAX_SAMPLE)
 
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
