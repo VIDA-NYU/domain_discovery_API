@@ -104,11 +104,13 @@ def multifield_term_search(s_fields, pageCount=100, fields=[], es_index='memex',
         
     queries = []
     filter_q = None
+
+    print "\n\n\n",s_fields,"\n\n\n"
     
     for k,v in s_fields.items():
         if "queries" in k:
             queries.extend(v)
-        if "filter" in k:
+        elif "filter" in k:
             filter_q = v
         else:
             query = {

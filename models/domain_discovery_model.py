@@ -1331,14 +1331,11 @@ class DomainModel(object):
     print "\n\nMULTI CRITERIA\n"
     
     s_fields = {}
-    s_fields_aux = {}
     if not session['filter'] is None:
       s_fields[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
-      s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
 
     if not session['fromDate'] is None:
       s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
-      s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
     hits=[]
     n_criteria = session['pageRetrievalCriteria'].keys()
@@ -1358,21 +1355,31 @@ class DomainModel(object):
         print "\n\n\n  criterion",criterion,"\n\n\n"
         n_criterion = n_criteria[i]
         if n_criterion == 'tag' and criterion == "Neutral":
+          if s_fields.get("tag"):
+            s_fields.pop("tag")
           s_fields["filter"] = {
             "missing" : { "field" : "tag" }
           }
+        elif(n_criterion in 'Maybe relevant'):
+            s_fields["label_neg"] =  1
+        elif(n_criterion in 'Maybe irrelevant'):
+            s_fields["label_pos"] =  1
+        elif(n_criterion in 'Unsure'):
+            s_fields["unsure_tag"] =  1
         else:
           s_fields[n_criterion] =  criterion 
         i = i+1
-    results= multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                     es_info['activeDomainIndex'],
-                                     es_info['docType'],
-                                     self._es)
-    if session['selected_morelike']=="moreLike":
-      morelike_result = self._getMoreLikePagesAll(session, results)
-      hits.extend(morelike_result)
-    else:
-      hits.extend(results)
+      results= multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                      es_info['activeDomainIndex'],
+                                      es_info['docType'],
+                                      self._es)
+      if s_fields.get("filter") is not None:
+        s_fields.pop("filter")
+      if session['selected_morelike']=="moreLike":
+        morelike_result = self._getMoreLikePagesAll(session, results)
+        hits.extend(morelike_result)
+      else:
+        hits.extend(results)
             
     return hits
 
@@ -1448,27 +1455,22 @@ class DomainModel(object):
     for tag in tags:
       if tag != "":
         if tag == "Neutral":
-          query_field_missing = {
-            "filtered" : {
-              "filter" : {
-                "missing" : { "field" : "tag" }
-              }
-            }
+          s_fields["filter"] = {
+            "missing" : { "field" : "tag" }
           }
-
-          s_fields["queries"] = [query_field_missing]
-
+          
           results = multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                            es_info['activeDomainIndex'],
                                            es_info['docType'],
                                            self._es)
 
           if session['selected_morelike']=="moreLike":
-              aux_result = self._getMoreLikePagesAll(session, results)
-              hits.extend(aux_result)
+            aux_result = self._getMoreLikePagesAll(session, results)
+            hits.extend(aux_result)
           else:
-              hits.extend(results)
-
+            hits.extend(results)
+          s_fields.pop("filter")
+          
           s_fields["tag"] = ""
 
           results = multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
@@ -1497,7 +1499,7 @@ class DomainModel(object):
               hits.extend(aux_result)
           else:
               hits.extend(results)
-
+          s_fields.pop("queries");    
     return hits
 
   def _getRelevantPages(self, session):
