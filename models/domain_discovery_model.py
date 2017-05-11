@@ -354,14 +354,11 @@ class DomainModel(object):
 
     hits = multifield_term_search(s_fields, self._all, ['tag','term'], self._termsIndex, 'terms', self._es)
 
-    print hits
-    
     result = {}
     for hit in hits:
       term = hit['term'][0]
       result[term] = {'tag':hit['tag'][0]}
-      
-    print "\n\n\n GET ANNOTATED TERMs", result.keys(),"\n\n\n"
+
     return result
                       
   # Add domain
