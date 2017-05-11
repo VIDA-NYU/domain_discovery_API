@@ -51,29 +51,29 @@ public class BingSearch {
 
 	
     public ArrayList<String> search(String query, String start, String top, String es_index, String es_doc_type, String es_server){
-	    if (this.prop == null){
-	        System.err.println("Error: config file is not loaded yet");
-	        return null;
-	    }
+	if (this.prop == null){
+	    System.err.println("Error: config file is not loaded yet");
+	    return null;
+	}
         int nTop = Integer.valueOf(top);
-	    int nStart = Integer.valueOf(start);
+	int nStart = Integer.valueOf(start);
 
-	    Download download = new Download(query, null, es_index, es_doc_type, es_server);
-	    ArrayList<String> results = new ArrayList<String>();
+	Download download = new Download(query, null, es_index, es_doc_type, es_server);
+	ArrayList<String> results = new ArrayList<String>();
 	    
-	    query = query.replaceAll(" ", "%20");
+	query = query.replaceAll(" ", "%20");
 
-	    try {
-	        int step = 10; //Bing can return maximum 50 results per query
-            URIBuilder builder = new URIBuilder("https://api.cognitive.microsoft.com/bing/v7.0/search");
-            builder.setParameter("q", query);
-            builder.setParameter("count", String.valueOf(step));
-            builder.setParameter("mkt", "en-us");
-            builder.setParameter("safesearch", "Off"); // allow results to include adult content
-            HttpClient httpclient = HttpClients.createDefault();
-
-	        for (; nStart < nTop; nStart += step){
-                builder.setParameter("offset", String.valueOf(start));
+	try {
+	    int step = 10; //Bing can return maximum 50 results per query
+	    URIBuilder builder = new URIBuilder("https://api.cognitive.microsoft.com/bing/v7.0/search");
+	    builder.setParameter("q", query);
+	    builder.setParameter("count", String.valueOf(step));
+	    builder.setParameter("mkt", "en-us");
+	    builder.setParameter("safesearch", "Off"); // allow results to include adult content
+	    HttpClient httpclient = HttpClients.createDefault();
+		
+	    for (; nStart < nTop; nStart += step){
+                builder.setParameter("offset", String.valueOf(nStart));
                 URI uri = builder.build();
 
                 HttpGet request = new HttpGet(uri);
@@ -87,32 +87,32 @@ public class BingSearch {
                 JSONObject webPagesTemp = jsResponse.getJSONObject("webPages");
                 JSONArray webpages = webPagesTemp.getJSONArray("value");
 
-	        	for (int i=0; i<webpages.length(); i++){
+		for (int i=0; i<webpages.length(); i++){
                     JSONObject item = webpages.getJSONObject(i);
                     String url = (String)item.get("url");
-	    		    results.add(url);
+		    results.add(url);
                     //System.out.println(url);
 
-	    		    JSONObject url_info = new JSONObject();
-	    		    url_info.put("link",url);
-	    		    url_info.put("rank",nStart+i);
-	    		    download.addTask(url_info);
-	        	}
-	        }
-	    } 
-	    catch (MalformedURLException e1) {
-	        e1.printStackTrace();
-	    } 
-	    catch (IOException e) {
-	        e.printStackTrace();
+		    JSONObject url_info = new JSONObject();
+		    url_info.put("link",url);
+		    url_info.put("rank",Integer.toString(nStart+i));
+		    download.addTask(url_info);
+		}
 	    }
-	    catch (Exception e){
-	        e.printStackTrace();
-	    }
+	} 
+	catch (MalformedURLException e1) {
+	    e1.printStackTrace();
+	} 
+	catch (IOException e) {
+	    e.printStackTrace();
+	}
+	catch (Exception e){
+	    e.printStackTrace();
+	}
 
-	    download.shutdown();
-	    System.out.println("Number of results: " + String.valueOf(results.size()));
-	    return results;
+	download.shutdown();
+	System.out.println("Number of results: " + String.valueOf(results.size()));
+	return results;
     }
 
     public static void main(String[] args) {
