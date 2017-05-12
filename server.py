@@ -71,6 +71,13 @@ class Page(object):
     return json.dumps(res)
 
   @cherrypy.expose
+  def getAvailableTLDs(self, session):
+    session = json.loads(session)
+    res = self._model.getAvailableTLDs(session)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(res)
+  
+  @cherrypy.expose
   def getAvailableQueries(self, session):
     session = json.loads(session)
     res = self._model.getAvailableQueries(session)
@@ -94,6 +101,14 @@ class Page(object):
     result = self._model.getAvailableModelTags(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(result)
+
+  @cherrypy.expose
+  def getAnnotatedTerms(self, session):
+    session = json.loads(session)
+    result = self._model.getAnnotatedTerms(session)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(result)
+
 
   @cherrypy.expose
   def getTagColors(self, domainId):
@@ -205,6 +220,7 @@ class Page(object):
   @cherrypy.expose
   def getPages(self, session):
     session = json.loads(session)
+    print "\n\n\n SERVER ",session,"\n\n\n"
     data = self._model.getPages(session)
     colors = self._model.getTagColors(session['domainId'])
     res = {"data": data}#//, "plot": selection_plot(data, colors)}
@@ -277,7 +293,7 @@ class Page(object):
   def deleteTerm(self, term, session):
     session = json.loads(session)
     self._model.deleteTerm(term, session)
-
+  
   # Download the pages of uploaded urls
   @cherrypy.expose
   def uploadUrls(self, urls, session):
