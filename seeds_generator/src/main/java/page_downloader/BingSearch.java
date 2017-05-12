@@ -18,6 +18,18 @@ import org.w3c.dom.*;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
 import org.json.JSONObject;
+import org.json.JSONArray;
+import org.json.JSONString;
+
+import java.net.URI;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.apache.http.entity.StringEntity;
 
 public class BingSearch {
     
@@ -29,7 +41,7 @@ public class BingSearch {
 	    prop = new Properties();
 	    FileInputStream is = new FileInputStream("conf/config.properties");
 	    prop.load(is);
-	    accountKey = prop.getProperty("ACCOUNTKEY");
+	    accountKey = prop.getProperty("ACCOUNTKEY_BING");
 	}   
 	catch(Exception e){
 	    e.printStackTrace();
@@ -38,62 +50,54 @@ public class BingSearch {
     } 
 
 	
-    public ArrayList<String> search(String query, String top, String es_index, String es_doc_type, String es_server){
+    public ArrayList<String> search(String query, String start, String top, String es_index, String es_doc_type, String es_server){
 	if (this.prop == null){
 	    System.err.println("Error: config file is not loaded yet");
 	    return null;
 	}
+        int nTop = Integer.valueOf(top);
+	int nStart = Integer.valueOf(start);
 
 	Download download = new Download(query, null, es_index, es_doc_type, es_server);
-	
 	ArrayList<String> results = new ArrayList<String>();
-	
+	    
 	query = query.replaceAll(" ", "%20");
-	byte[] accountKeyBytes = Base64.encodeBase64((this.accountKey + ":" + this.accountKey).getBytes());
-	String accountKeyEnc = new String(accountKeyBytes);
-	URL query_url;
+
 	try {
-	    int chunk = 50;
-	    if (Integer.valueOf(top) < 50)
-		chunk = Integer.valueOf(top); 
-	    int skip_index = 0;
-	    while(chunk > 0){
-	    	query_url = new URL("https://api.datamarket.azure.com/Data.ashx/Bing/Search/v1/Web?Adult=%27Off%27&$skip=" + String.valueOf(skip_index*50) + "&Query=%27" + query + "%20filetype:html" + "%27&$top=" + String.valueOf(chunk));
+	    int step = 10; //Bing can return maximum 50 results per query
+	    URIBuilder builder = new URIBuilder("https://api.cognitive.microsoft.com/bing/v7.0/search");
+	    builder.setParameter("q", query);
+	    builder.setParameter("count", String.valueOf(step));
+	    builder.setParameter("mkt", "en-us");
+	    builder.setParameter("safesearch", "Off"); // allow results to include adult content
+	    HttpClient httpclient = HttpClients.createDefault();
+		
+	    for (; nStart < nTop; nStart += step){
+                builder.setParameter("offset", String.valueOf(nStart));
+                URI uri = builder.build();
 
-	    	HttpURLConnection conn = (HttpURLConnection)query_url.openConnection();
-	    	conn.setRequestMethod("GET");
-	    	conn.setRequestProperty("Authorization", "Basic " + accountKeyEnc);
+                HttpGet request = new HttpGet(uri);
+                request.setHeader("Ocp-Apim-Subscription-Key", this.accountKey);
 
-	    	BufferedReader br = new BufferedReader(new InputStreamReader((conn.getInputStream())));
-	    	String output = "";
-	    	String line;
-	    	while ((line = br.readLine()) != null) {
-			output = output + line;
-	    	} 
-	    	conn.disconnect();
+                HttpResponse response = httpclient.execute(request);
+                HttpEntity entity = response.getEntity();
 
-	    	DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
-	    	DocumentBuilder docBuilder = docBuilderFactory.newDocumentBuilder(); 
-	    	InputSource is = new InputSource(new StringReader(output));
-	    	Document doc = docBuilder.parse(is);
-	    	NodeList urls = doc.getElementsByTagName("d:Url");
-	    	int totalUrls = urls.getLength();
+                String json_string = EntityUtils.toString(entity);
+                JSONObject jsResponse = new JSONObject(json_string);
+                JSONObject webPagesTemp = jsResponse.getJSONObject("webPages");
+                JSONArray webpages = webPagesTemp.getJSONArray("value");
 
-	    	for (int i=0; i<totalUrls; i++){
-			Element e = (Element)urls.item(i);
-			NodeList nl = e.getChildNodes();
-			String url = Download_Utils.validate_url((nl.item(0).getNodeValue()));
-			results.add(url);
-			JSONObject url_info = new JSONObject();
-			url_info.put("link",url);
-			url_info.put("rank",(skip_index*50)+i);
-			download.addTask(url_info);
+		for (int i=0; i<webpages.length(); i++){
+                    JSONObject item = webpages.getJSONObject(i);
+                    String url = (String)item.get("url");
+		    results.add(url);
+                    //System.out.println(url);
 
-	    	}
-		if ((Integer.valueOf(top) - chunk) < 50) 
-			chunk = Integer.valueOf(top) - chunk;
-		else chunk += 50;
-		++skip_index;
+		    JSONObject url_info = new JSONObject();
+		    url_info.put("link",url);
+		    url_info.put("rank",Integer.toString(nStart+i));
+		    download.addTask(url_info);
+		}
 	    }
 	} 
 	catch (MalformedURLException e1) {
@@ -115,6 +119,8 @@ public class BingSearch {
 	
 	String query = ""; //default
 	String top = "50"; //default
+    String start = "1"; //default
+
 	String es_index = "memex";
 	String es_doc_type = "page";
 	String es_server = "localhost";
@@ -126,6 +132,8 @@ public class BingSearch {
 		query = args[++i];
 	    } else if(arg.equals("-t")){ 
 		top = args[++i];
+	    } else if(arg.equals("-b")){
+		start = args[++i];
 	    } else if(arg.equals("-i")){
 		es_index = args[++i];
 	    } else if(arg.equals("-d")){
@@ -140,6 +148,6 @@ public class BingSearch {
 	}
 	
 	BingSearch bs = new BingSearch();
-	bs.search(query, top, es_index, es_doc_type, es_server);
+	bs.search(query, start, top, es_index, es_doc_type, es_server);
     }
 }

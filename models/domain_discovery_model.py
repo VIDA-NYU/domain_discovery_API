@@ -100,7 +100,7 @@ class DomainModel(object):
     else:
       es_info["mapping"] = self._mapping
     return es_info
-    
+
   def setPath(self, path):
     self._path = path
 
@@ -113,7 +113,7 @@ class DomainModel(object):
   def getAvailableDomains(self):
     """
     List the domains as saved in elasticsearch.
- 
+
     Parameters:
         None
 
@@ -188,6 +188,8 @@ class DomainModel(object):
   def getAvailableModelTags(self, session):
     es_info = self._esInfo(session['domainId'])
 
+    self.predictUnlabeled(session)
+    
     unsure_tags = self._getUnsureLabelPages(session)
     unique_tags = {"Unsure": len(unsure_tags)}
 
@@ -201,14 +203,14 @@ class DomainModel(object):
 
   def getPagesSummaryDomain(self, opt_ts1 = None, opt_ts2 = None, opt_applyFilter = False, session = None):
 
-    """ Returns number of pages downloaded between opt_ts1 and opt_ts2 for active domain.  
-    If opt_applyFilter is True, the summary returned corresponds 
+    """ Returns number of pages downloaded between opt_ts1 and opt_ts2 for active domain.
+    If opt_applyFilter is True, the summary returned corresponds
     to the applied pages filter defined previously in @applyFilter. Otherwise the returned summary
     corresponds to the entire dataset between ts1 and ts2.
-    
+
     Parameters:
         opt_ts1 (long): start time from when pages need to be returned. Unix epochs (seconds after 1970).
-      
+
         opt_ts2 (long): start time from when pages need to be returned. Unix epochs (seconds after 1970).
 
         opt_applyFiler (bool): Apply filtering to the pages
@@ -218,7 +220,7 @@ class DomainModel(object):
     Returns:
         json: {'Positive': {'Explored': explored, 'Exploited': exploited, 'Boosted': boosted},
                'Negative': {'Explored': numExploredPages, 'Exploited': numExploitedPages},...}
-    """ 
+    """
     es_info = self._esInfo(session['domainId'])
 
     # If ts1 not specified, sets it to -Infinity.
@@ -414,19 +416,19 @@ class DomainModel(object):
         colors["colors"][fields[0]] = fields[1]
 
     return colors
-  
+
 #######################################################################################################
 # Acquire Content
 #######################################################################################################
 
   def queryWeb(self, terms, max_url_count = 100, session = None):
     """ Issue query on the web: results are stored in elastic search, nothing returned here.
-    
+
     Parameters:
         terms (string): Search query string
         max_url_count (int): Number of pages to query. Maximum allowed = 100
         session (json): should have domainId
-    
+
     Returns:
         None
 
@@ -473,11 +475,11 @@ class DomainModel(object):
 
   def uploadUrls(self, urls_str, session):
     """ Download pages corresponding to already known set of domain URLs
-    
+
     Parameters:
         urls_str (string): Space separated list of URLs
         session (json): should have domainId
-    
+
     Returns:
         number of pages downloaded (int)
 
@@ -490,7 +492,7 @@ class DomainModel(object):
 
   def getForwardLinks(self, urls, session):
     """ The content can be extended by crawling the given pages one level forward. The assumption here is that a relevant page will contain links to other relevant pages.
-    
+
     Parameters:
         urls (list): list of urls to crawl forward
         session (json): should have domainId
@@ -595,9 +597,9 @@ class DomainModel(object):
         applyTagFlag (bool): True - Add tag, False - Remove tag
         session (json): Should contain domainId
 
-    Returns: 
+    Returns:
        Returns string "Completed Process"
-    
+
     """
     es_info = self._esInfo(session['domainId'])
 
@@ -676,16 +678,16 @@ class DomainModel(object):
     # TODO(Yamuna): Apply tag to page and update in elastic search. Suggestion: concatenate tags
     # with semi colon, removing repetitions.
     """ Tag the terms as 'Positive'/'Negative' which indicate relevance or irrelevance to the domain of interest. Tags help in reranking terms to show the ones relevan to the domain.
-    
+
     Parameters:
         terms (string): list of terms to apply tag
         tag (string): 'Positive' or 'Negative'
         applyTagFlag (bool): True - Add tag, False - Remove tag
         session (json): Should contain domainId
 
-    Returns: 
+    Returns:
         None
-    
+
     """
     es_info = self._esInfo(session['domainId'])
 
@@ -762,17 +764,17 @@ class DomainModel(object):
 
   def extractTerms(self, opt_maxNumberOfTerms = 40, session = None):
     """ Extract most relevant unigrams, bigrams and trigrams that summarize the pages.
-    These could provide unknown information about the domain. This in turn could 
+    These could provide unknown information about the domain. This in turn could
     suggest further queries for searching content.
 
     Parameters:
         opt_maxNumberOfTerms (int): Number of terms to return
 
         session (json): should have domainId
-            
+
     Returns:
         array: [[term, frequencyInRelevantPages, frequencyInIrrelevantPages, tags], ...]
-    
+
     """
 
     es_info = self._esInfo(session['domainId'])
@@ -1068,7 +1070,7 @@ class DomainModel(object):
         ntopics (int): The number of topics to be used when modeling the corpus.
 
     Returns:
-    
+
         model: topik model, encoding things like term frequencies, etc.
     """
     es_info = self._esInfo(session['domainId'])
@@ -1088,12 +1090,12 @@ class DomainModel(object):
     model = run_model(vectors, model_name=model, ntopics=ntopics)
 
     return {"model": model, "domain": es_info['activeDomainIndex']}
-  
+
 
 #######################################################################################################
 # Organize Content
 #######################################################################################################
-  
+
   def getPagesProjection(self, session):
     """ Organize content by some criteria such as relevance, similarity or category which allows to easily analyze groups of pages. The 'x','y' co-ordinates returned project the page in 2D maintaining clustering based on the projection chosen. The projection criteria is specified in the session object
 
@@ -1180,7 +1182,7 @@ class DomainModel(object):
       return {'pages': [[doc[0],1,1,doc[3]]]}
     else:
       return {'pages': []}
-  
+
 #######################################################################################################
 # Filter Content
 #######################################################################################################
@@ -1188,15 +1190,15 @@ class DomainModel(object):
   def getPages(self, session):
     """ Find pages that satisfy the specified criteria. One or more of the following criteria are specified
     in the session object as 'pageRetrievalCriteria':
-    
+
     'Most Recent', 'More like', 'Queries', 'Tags', 'Model Tags', 'Maybe relevant', 'Maybe irrelevant', 'Unsure'
-    
+
     and filter by keywords specified in the session object as 'filter'
-    
+
     Parameters:
         session (json): Should contain 'domainId','pageRetrievalCriteria' or 'filter'
 
-    Returns: 
+    Returns:
         json: {url1: {snippet, image_url, title, tags, retrieved}} (tags are a list, potentially empty)
 
     """
@@ -1223,7 +1225,7 @@ class DomainModel(object):
       if not hit.get(es_info['mapping']['tag']) is None:
         doc["tags"] = hit[es_info['mapping']['tag']]
       if not hit.get("rank") is None:
-        doc["tags"] = hit["rank"]
+        doc["rank"] = hit["rank"]
       if not hit.get(es_info['mapping']["timestamp"]) is None:
         doc["timestamp"] = hit[es_info['mapping']["timestamp"]]
 
@@ -1284,40 +1286,26 @@ class DomainModel(object):
         for tag in tags:
             if tag != "":
                 if tag == "Neutral":
-                    query_aux = "(" + "query" + ":" + query + ")"
-                    query_field_missing = {
-                        "filtered" : {
-                          "query": {
-                              "query_string": {
-                                  "query": query_aux
-                              }
-                          },
-                          "filter" : {
-                            "missing" : { "field" : "tag" }
-                          }
-                        }
-                    }
-
-                    s_fields_aux["queries"] = [query_field_missing]
-
-                    results = multifield_term_search(s_fields_aux, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                            es_info['activeDomainIndex'],
-                                            es_info['docType'],
-                                            self._es)
+                    s_fields["filter"] = {"missing" : { "field" : "tag" }}
 
                 else:
-                    s_fields[es_info['mapping']['tag']] = '"' + tag + '"'
-                    s_fields[es_info['mapping']["query"]] = '"' + query + '"'
-                    results= multifield_query_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                    s_fields[es_info['mapping']['tag']] = tag
+
+                s_fields[es_info['mapping']["query"]] = query
+
+                results = multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                             es_info['activeDomainIndex'],
                                             es_info['docType'],
                                             self._es)
+
                 if session['selected_morelike']=="moreLike":
                     aux_result = self._getMoreLikePagesAll(session, results)
                     hits.extend(aux_result)
                 else:
                     hits.extend(results)
 
+                s_fields.pop("filter",None)
+                s_fields.pop("tag", None)
 
     return hits
 
@@ -1748,7 +1736,7 @@ class DomainModel(object):
 
   def updateOnlineClassifier(self, session):
     es_info = self._esInfo(session['domainId'])
-
+    
     onlineClassifier = None
     trainedPosSamples = []
     trainedNegSamples = []
@@ -1824,17 +1812,17 @@ class DomainModel(object):
     clf = None
     train_data = None
     if pos_text or neg_text:
-      self._onlineClassifiers[session['domainId']]["trainedPosSamples"] = self._onlineClassifiers[session['domainId']]["trainedPosSamples"] + pos_ids
-      self._onlineClassifiers[session['domainId']]["trainedNegSamples"] = self._onlineClassifiers[session['domainId']]["trainedNegSamples"] + neg_ids
       [train_data,_] = self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(pos_text+neg_text)
-      self._onlineClassifiers[session['domainId']]["onlineClassifier"].partialFit(train_data, pos_labels+neg_labels)
-
+      clf = self._onlineClassifiers[session['domainId']]["onlineClassifier"].partialFit(train_data, pos_labels+neg_labels)
+      if clf != None:
+        self._onlineClassifiers[session['domainId']]["trainedPosSamples"] = self._onlineClassifiers[session['domainId']]["trainedPosSamples"] + pos_ids
+        self._onlineClassifiers[session['domainId']]["trainedNegSamples"] = self._onlineClassifiers[session['domainId']]["trainedNegSamples"] + neg_ids
+      
     # ****************************************************************************************
 
     # Fit calibratrated classifier
 
-
-    if train_data != None:
+    if train_data != None and clf != None:
 
       trainedPosSamples = self._onlineClassifiers[session['domainId']]["trainedPosSamples"]
       trainedNegSamples = self._onlineClassifiers[session['domainId']]["trainedNegSamples"]
@@ -1916,6 +1904,11 @@ class DomainModel(object):
     label_neg = 0
     unlabeled_urls = []
 
+    MAX_SAMPLE = 1000
+
+    if self._onlineClassifiers.get(session['domainId']) == None:
+      return
+    
     sigmoid = self._onlineClassifiers[session['domainId']].get("sigmoid")
     if sigmoid != None:
       unlabelled_docs = field_missing(es_info["mapping"]["tag"], ["url", es_info["mapping"]["text"]], self._all,
@@ -1923,8 +1916,8 @@ class DomainModel(object):
                                       es_info['docType'],
                                       self._es)
 
-      if len(unlabelled_docs) > 2000:
-        unlabelled_docs = sample(unlabelled_docs, 2000)
+      if len(unlabelled_docs) > MAX_SAMPLE:
+        unlabelled_docs = sample(unlabelled_docs, MAX_SAMPLE)
 
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
@@ -2117,4 +2110,3 @@ class DomainModel(object):
     epoch = datetime.utcfromtimestamp(0)
     delta = dt - epoch
     return delta.total_seconds()
-
