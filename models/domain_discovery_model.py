@@ -1327,12 +1327,12 @@ class DomainModel(object):
 
     print "\n\nMULTI CRITERIA\n"
     
-    s_fields = {}
+    s_fields_aux = {}
     if not session['filter'] is None:
-      s_fields[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
+      s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
 
     if not session['fromDate'] is None:
-      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+      s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
     hits=[]
     n_criteria = session['pageRetrievalCriteria'].keys()
@@ -1346,14 +1346,16 @@ class DomainModel(object):
     
     for criteria in criteria_comb:
       print "\n\n\n  criteria",  criteria,"\n\n\n"
+      print "s_fields_aux", s_fields_aux
+      s_fields = s_fields_aux.copy()
       i = 0
       for criterion_index in criteria:
         criterion = n_criteria_vals[i][criterion_index]
         print "\n\n\n  criterion",criterion,"\n\n\n"
         n_criterion = n_criteria[i]
         if n_criterion == 'tag' and criterion == "Neutral":
-          if s_fields.get("tag"):
-            s_fields.pop("tag")
+          # if s_fields.get("tag"):
+          #   s_fields.pop("tag")
           s_fields["filter"] = {
             "missing" : { "field" : "tag" }
           }
@@ -1370,8 +1372,8 @@ class DomainModel(object):
                                       es_info['activeDomainIndex'],
                                       es_info['docType'],
                                       self._es)
-      if s_fields.get("filter") is not None:
-        s_fields.pop("filter")
+      # if s_fields.get("filter") is not None:
+      #   s_fields.pop("filter")
       if session['selected_morelike']=="moreLike":
         morelike_result = self._getMoreLikePagesAll(session, results)
         hits.extend(morelike_result)
