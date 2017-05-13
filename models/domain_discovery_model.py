@@ -61,7 +61,7 @@ class DomainModel(object):
 
   w2v = word2vec.word2vec(from_es=False)
 
-  def __init__(self):
+  def __init__(self, path=""):
     self._es = None
     self._all = 10000
     self._termsIndex = "ddt_terms"
@@ -79,14 +79,16 @@ class DomainModel(object):
     self._domains = None
     self._onlineClassifiers = {}
     self._pos_tags = ['NN', 'NNS', 'NNP', 'NNPS', 'FW', 'JJ']
-    self._path = ""
-
+    self._path = path
 
     self.results_file = open("results.txt", "w")
 
     self.pool = Pool(max_workers=3)
     self.seedfinder = RunSeedFinder()
+    self.runningCrawlers={}
 
+    #self._initACHE()
+    
   def _encode(self, url):
     return urllib2.quote(url).replace("/", "%2F")
 
@@ -101,6 +103,22 @@ class DomainModel(object):
       es_info["mapping"] = self._mapping
     return es_info
 
+  def _initACHE(self):
+
+    with open(self._path+"/ache.yml","w") as fw:
+      with open(self._path+"/ache.yml-in","r") as fr:
+        for line in fr.readlines():
+          if "target_storage.data_format.type: ELASTICSEARCH" in line:
+            fw.write("target_storage.data_format.type: ELASTICSEARCH"+"\n")
+          elif "target_storage.data_format.elasticsearch.host:" in line:  
+            fw.write("target_storage.data_format.elasticsearch.host: " +es_server+"\n")
+          elif "target_storage.data_format.elasticsearch.port:" in line:            
+            fw.write("target_storage.data_format.elasticsearch.port: 9300"+"\n")
+          elif "target_storage.data_format.elasticsearch.cluster_name:" in line:
+            fw.write("target_storage.data_format.elasticsearch.cluster_name: elasticsearch"+"\n")
+          else:
+            fw.write(line)
+            
   def setPath(self, path):
     self._path = path
 
@@ -156,7 +174,12 @@ class DomainModel(object):
 
     """
     es_info = self._esInfo(session['domainId'])
-    return get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    queries = get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    crawlData = field_missing('query', [self._mapping["url"]], self._all,es_info['activeDomainIndex'], es_info['docType'], self._es)
+    if len(crawlData) > 0:
+      queries["Crawled Data"] = len(crawlData)
+    
+    return queries
 
   def getAvailableTags(self, session):
     """ Return all tags for the selected domain.
@@ -1984,7 +2007,44 @@ class DomainModel(object):
         pos_indices = np.nonzero(classp)
         neg_indices = np.where(classp == 0)
 
+#######################################################################################################
+# Run Crawler
+#######################################################################################################
 
+  def startCrawler(self, session):
+    """ Stat the ACHE crawler for the specfied domain with the domain model. The
+    results are stored in the same index
+    
+    Parameters:
+    session (json): should have domainId
+    
+    Returns:
+    None
+    """
+  
+    es_info = self._esInfo(session['domainId'])
+
+    data_dir = self._path + "/data/"
+    data_domain  = data_dir + es_info['activeDomainIndex']
+    domainmodel_dir = data_domain + "/models/"
+
+    if (not isdir(domainmodel_dir)):
+      self.createModel(session, False)
+      if (not isdir(domainmodel_dir)):
+        return "No domain model available"
+
+    ache_home = environ['ACHE_HOME']
+    print "\n\n\n",ache_home,"\n\n\n"
+    comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -m " + domainmodel_dir + " -o " + domainmodel_dir + " -s " + data_domain + "/seeds.txt" 
+    p = Popen(comm, shell=True, stderr=PIPE)
+    output, errors = p.communicate()
+    print output
+    print errors
+
+    self.runningCrawlers[session['domainId']] = p
+
+    return "Crawler is running"
+  
 #######################################################################################################
 
   def getPlottingData(self, session):
