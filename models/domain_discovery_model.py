@@ -144,7 +144,7 @@ class DomainModel(object):
     """
     es_info = self._esInfo(session['domainId'])
     return get_unique_values('domain', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
-  
+
   def getAvailableQueries(self, session):
     """ Return all queries for the selected domain.
 
@@ -189,7 +189,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
 
     self.predictUnlabeled(session)
-    
+
     unsure_tags = self._getUnsureLabelPages(session)
     unique_tags = {"Unsure": len(unsure_tags)}
 
@@ -362,7 +362,7 @@ class DomainModel(object):
       result[term] = {'tag':hit['tag'][0]}
 
     return result
-                      
+
   # Add domain
   def addDomain(self, index_name):
 
@@ -1314,7 +1314,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
 
     print "\n\nMULTI CRITERIA\n"
-    
+
     s_fields_aux = {}
     if not session['filter'] is None:
       s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
@@ -1331,7 +1331,7 @@ class DomainModel(object):
     criteria_comb = product(*[range(0,len(val)) for val in n_criteria_vals])
 
     print "\n\n\n  criteria_comb",  criteria_comb,"\n\n\n"
-    
+
     for criteria in criteria_comb:
       print "\n\n\n  criteria",  criteria,"\n\n\n"
       print "s_fields_aux", s_fields_aux
@@ -1354,7 +1354,7 @@ class DomainModel(object):
         elif(n_criterion in 'Unsure'):
             s_fields["unsure_tag"] =  1
         else:
-          s_fields[n_criterion] =  criterion 
+          s_fields[n_criterion] =  criterion
         i = i+1
       results= multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                       es_info['activeDomainIndex'],
@@ -1367,10 +1367,10 @@ class DomainModel(object):
         hits.extend(morelike_result)
       else:
         hits.extend(results)
-            
+
     return hits
 
-  
+
   def _getPagesForQueries(self, session):
     es_info = self._esInfo(session['domainId'])
 
@@ -1426,7 +1426,7 @@ class DomainModel(object):
       else:
         hits.extend(results)
     return hits
-  
+
   def _getPagesForTags(self, session):
     es_info = self._esInfo(session['domainId'])
 
@@ -1445,7 +1445,7 @@ class DomainModel(object):
           s_fields["filter"] = {
             "missing" : { "field" : "tag" }
           }
-          
+
           results = multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                            es_info['activeDomainIndex'],
                                            es_info['docType'],
@@ -1457,7 +1457,7 @@ class DomainModel(object):
           else:
             hits.extend(results)
           s_fields.pop("filter")
-          
+
           s_fields["tag"] = ""
 
           results = multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
@@ -1486,7 +1486,7 @@ class DomainModel(object):
               hits.extend(aux_result)
           else:
               hits.extend(results)
-          s_fields.pop("queries");    
+          s_fields.pop("queries");
     return hits
 
   def _getRelevantPages(self, session):
@@ -1701,8 +1701,12 @@ class DomainModel(object):
     print errors
 
     if zip:
-      zip_filename = data_domain + es_info['activeDomainIndex'] + "_model.zip"
-      with ZipFile(zip_filename, "w") as modelzip:
+      print data_domain
+      print es_info['activeDomainIndex']
+      zip_filename = data_domain + "_model.zip"
+      #Create tha model in the client (client/build/models/). Just the client site is being exposed
+      saveClientSite = zip_filename.replace('server/data/','client/build/models/')
+      with ZipFile(saveClientSite, "w") as modelzip:
         if (isfile(domainmodel_dir + "/pageclassifier.features")):
           print "zipping file: "+domainmodel_dir + "/pageclassifier.features"
           modelzip.write(domainmodel_dir + "/pageclassifier.features", "pageclassifier.features")
@@ -1726,8 +1730,7 @@ class DomainModel(object):
         if (isfile(data_domain +"/seeds.txt")):
           print "zipping file: "+data_domain +"/seeds.txt"
           modelzip.write(data_domain +"/seeds.txt", es_info['activeDomainIndex'] + "_seeds.txt")
-
-        chmod(zip_filename, 0o777)
+        chmod(saveClientSite, 0o777)
 
       return "models/" + es_info['activeDomainIndex'] + "_model.zip"
     else:
@@ -1736,7 +1739,7 @@ class DomainModel(object):
 
   def updateOnlineClassifier(self, session):
     es_info = self._esInfo(session['domainId'])
-    
+
     onlineClassifier = None
     trainedPosSamples = []
     trainedNegSamples = []
@@ -1817,7 +1820,7 @@ class DomainModel(object):
       if clf != None:
         self._onlineClassifiers[session['domainId']]["trainedPosSamples"] = self._onlineClassifiers[session['domainId']]["trainedPosSamples"] + pos_ids
         self._onlineClassifiers[session['domainId']]["trainedNegSamples"] = self._onlineClassifiers[session['domainId']]["trainedNegSamples"] + neg_ids
-      
+
     # ****************************************************************************************
 
     # Fit calibratrated classifier
@@ -1908,7 +1911,7 @@ class DomainModel(object):
 
     if self._onlineClassifiers.get(session['domainId']) == None:
       return
-    
+
     sigmoid = self._onlineClassifiers[session['domainId']].get("sigmoid")
     if sigmoid != None:
       unlabelled_docs = field_missing(es_info["mapping"]["tag"], ["url", es_info["mapping"]["text"]], self._all,
