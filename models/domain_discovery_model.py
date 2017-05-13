@@ -87,7 +87,7 @@ class DomainModel(object):
     self.seedfinder = RunSeedFinder()
     self.runningCrawlers={}
 
-    #self._initACHE()
+    self._initACHE()
     
   def _encode(self, url):
     return urllib2.quote(url).replace("/", "%2F")
@@ -116,6 +116,10 @@ class DomainModel(object):
             fw.write("target_storage.data_format.elasticsearch.port: 9300"+"\n")
           elif "target_storage.data_format.elasticsearch.cluster_name:" in line:
             fw.write("target_storage.data_format.elasticsearch.cluster_name: elasticsearch"+"\n")
+          elif "target_storage.data_format.elasticsearch.rest.hosts:" in line:
+            fw.write("target_storage.data_format.elasticsearch.rest.hosts:" + "\n")
+          elif "- http://localhost:9200" in line:
+            fw.write("  - http://localhost:9200" + "\n")
           else:
             fw.write(line)
             
@@ -1227,6 +1231,8 @@ class DomainModel(object):
     """
     es_info = self._esInfo(session['domainId'])
 
+    session['pagesCap'] = self._all
+
     format = '%m/%d/%Y %H:%M %Z'
     if not session.get('fromDate') is None:
       session['fromDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['fromDate'], format)))
@@ -1397,19 +1403,28 @@ class DomainModel(object):
   def _getPagesForQueries(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    s_fields = {}
+    s_fields_aux = {}
     if not session['filter'] is None:
-      s_fields[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
+      s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
 
     if not session['fromDate'] is None:
-      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+      s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
     hits=[]
     queries = session['selected_queries'].split(',')
 
     for query in queries:
-      s_fields[es_info['mapping']["query"]] = '"' + query + '"'
-      results= multifield_query_search(s_fields,
+      s_fields = s_fields_aux.copy()
+      if "Crawled Data" in query:
+        s_fields["filter"] = {
+          "missing" : { "field" : "query" }
+        }
+      else:
+        s_fields[es_info['mapping']["query"]] = query
+
+      print "\n\n\n",s_fields,"\n\n\n"
+      
+      results= multifield_term_search(s_fields,
                                        session['pagesCap'],
                                        ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
                                        es_info['activeDomainIndex'],
@@ -2012,7 +2027,7 @@ class DomainModel(object):
 #######################################################################################################
 
   def startCrawler(self, session):
-    """ Stat the ACHE crawler for the specfied domain with the domain model. The
+    """ Start the ACHE crawler for the specfied domain with the domain model. The
     results are stored in the same index
     
     Parameters:
@@ -2035,7 +2050,7 @@ class DomainModel(object):
 
     ache_home = environ['ACHE_HOME']
     print "\n\n\n",ache_home,"\n\n\n"
-    comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -m " + domainmodel_dir + " -o " + domainmodel_dir + " -s " + data_domain + "/seeds.txt" 
+    comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainmodel_dir + " -s " + data_domain + "/seeds.txt" 
     p = Popen(comm, shell=True, stderr=PIPE)
     output, errors = p.communicate()
     print output
@@ -2044,6 +2059,25 @@ class DomainModel(object):
     self.runningCrawlers[session['domainId']] = p
 
     return "Crawler is running"
+
+  def stopCrawler(self, session):
+    """ Stop the ACHE crawler for the specfied domain with the domain model. The
+    results are stored in the same index
+    
+    Parameters:
+    session (json): should have domainId
+    
+    Returns:
+    None
+    """
+    p = self.runningCrawlers[session['domainId']]
+    
+    p.terminate()
+
+    while p.poll() is None:
+      sleep(2)
+
+    return "Crawler Stopped"
   
 #######################################################################################################
 
