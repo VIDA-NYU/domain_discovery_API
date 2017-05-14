@@ -2,6 +2,7 @@ import urllib2
 import sys
 from os import environ, chdir
 from elastic.config import es_server
+import re
 
 from subprocess import Popen, PIPE, STDOUT
 
@@ -92,6 +93,45 @@ def callDownloadUrls(query, subquery, urls_str, es_info):
     
     print "\n\n\n", output, "\n\n\n"
     print "\n\n\n", errors, "\n\n\n"
+
+def getImage(responseBody, url):
+  # try to extract og:image or the first <img> tag available in the html
+  responseBody = responseBody.strip()
+
+  img_url = ""
+  p = re.compile("<meta .*?=\"og:image\" content=\"(.*?)\"(.*?)", re.IGNORECASE)
+  m = p.match(responseBody)
+  
+  if(m):
+      img_url = m.group(1)
+  else:
+    p = re.compile("<meta content=\"(.*?)\" .*?=\"og:image\"", re.IGNORECASE)
+    m = p.match(responseBody)
+      
+    if(m):
+      img_url = m.group(1)
+    else:
+	  p = re.compile("<img(.*?)src=\"(.*?)\"", re.IGNORECASE)
+	  m = p.match(responseBody[responseBody.find("<body"):len(responseBody)-1])
+	  if(m):
+	      img_url = m.group(2)
+	  else:
+            return ""
+  
+  # could find a image
+  # try to fix or resolve relative URLs
+  if("http://" in img_url or
+     "https://" in img_url): # complete URL found
+    return img_url
+  
+  if(img_url.indexOf("//") == 0): #URL without protocol found
+    return "http:"+img_url
+
+  #relative URL found
+  img_url = url+img_url
+
+  return img_url
+
 
 def main(argv):
   if len(argv) != 1:
