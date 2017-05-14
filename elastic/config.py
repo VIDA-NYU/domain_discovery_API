@@ -15,7 +15,12 @@ if environ.get('ELASTICSEARCH_SERVER'):
     if "https" in es_server:
         use_ssl=True
 else:
-    es_server = 'http://localhost:9200/'
+    es_server = 'localhost'
+
+if environ.get('ELASTICSEARCH_PORT'):
+    es_port = environ['ELASTICSEARCH_PORT']
+else:
+    es_port = "9200"
 
 print 'ELASTICSEARCH_SERVER ', es_server
 
@@ -33,11 +38,11 @@ else:
 
 if es_user:
     if use_ssl:
-        es = Elasticsearch([es_server], http_auth=(es_user, es_passwd), use_ssl=True, verify_certs=True, ca_certs=certifi.where(), timeout=100)
+        es = Elasticsearch([es_server+":"+es_port], http_auth=(es_user, es_passwd), use_ssl=True, verify_certs=True, ca_certs=certifi.where(), timeout=100)
     else:
-        es = Elasticsearch([es_server], http_auth=(es_user, es_passwd), timeout=100)
+        es = Elasticsearch([es_server+":"+es_port], http_auth=(es_user, es_passwd), timeout=100)
 else:
-    es = Elasticsearch([es_server])
+    es = Elasticsearch([es_server+":"+es_port])
 
 if environ.get('ELASTICSEARCH_DOC_TYPE'):
     es_doc_type = environ['ELASTICSEARCH_DOC_TYPE']

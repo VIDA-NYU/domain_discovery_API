@@ -26,7 +26,7 @@ from zipfile import ZipFile
 
 from elasticsearch import Elasticsearch
 
-from seeds_generator.download import callDownloadUrls
+from seeds_generator.download import callDownloadUrls, getImage
 from seeds_generator.runSeedFinder import RunSeedFinder
 from seeds_generator.concat_nltk import get_bag_of_words
 from elastic.get_config import get_available_domains, get_mapping, get_tag_colors
@@ -61,7 +61,7 @@ class DomainModel(object):
 
   w2v = word2vec.word2vec(from_es=False)
 
-  def __init__(self):
+  def __init__(self, path=""):
     self._es = None
     self._all = 10000
     self._termsIndex = "ddt_terms"
@@ -79,14 +79,16 @@ class DomainModel(object):
     self._domains = None
     self._onlineClassifiers = {}
     self._pos_tags = ['NN', 'NNS', 'NNP', 'NNPS', 'FW', 'JJ']
-    self._path = ""
-
+    self._path = path
 
     self.results_file = open("results.txt", "w")
 
     self.pool = Pool(max_workers=3)
     self.seedfinder = RunSeedFinder()
+    self.runningCrawlers={}
 
+    self._initACHE()
+    
   def _encode(self, url):
     return urllib2.quote(url).replace("/", "%2F")
 
@@ -101,6 +103,26 @@ class DomainModel(object):
       es_info["mapping"] = self._mapping
     return es_info
 
+  def _initACHE(self):
+
+    with open(self._path+"/ache.yml","w") as fw:
+      with open(self._path+"/ache.yml-in","r") as fr:
+        for line in fr.readlines():
+          if "target_storage.data_format.type: ELASTICSEARCH" in line:
+            fw.write("target_storage.data_format.type: ELASTICSEARCH"+"\n")
+          elif "target_storage.data_format.elasticsearch.host:" in line:  
+            fw.write("target_storage.data_format.elasticsearch.host: " +es_server+"\n")
+          elif "target_storage.data_format.elasticsearch.port:" in line:            
+            fw.write("target_storage.data_format.elasticsearch.port: 9300"+"\n")
+          elif "target_storage.data_format.elasticsearch.cluster_name:" in line:
+            fw.write("target_storage.data_format.elasticsearch.cluster_name: elasticsearch"+"\n")
+          elif "target_storage.data_format.elasticsearch.rest.hosts:" in line:
+            fw.write("target_storage.data_format.elasticsearch.rest.hosts:" + "\n")
+          elif "- http://localhost:9200" in line:
+            fw.write("  - http://localhost:9200" + "\n")
+          else:
+            fw.write(line)
+            
   def setPath(self, path):
     self._path = path
 
@@ -156,7 +178,12 @@ class DomainModel(object):
 
     """
     es_info = self._esInfo(session['domainId'])
-    return get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    queries = get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    crawlData = field_missing('query', [self._mapping["url"]], self._all,es_info['activeDomainIndex'], es_info['docType'], self._es)
+    if len(crawlData) > 0:
+      queries["Crawled Data"] = len(crawlData)
+    
+    return queries
 
   def getAvailableTags(self, session):
     """ Return all tags for the selected domain.
@@ -1204,6 +1231,8 @@ class DomainModel(object):
     """
     es_info = self._esInfo(session['domainId'])
 
+    session['pagesCap'] = self._all
+
     format = '%m/%d/%Y %H:%M %Z'
     if not session.get('fromDate') is None:
       session['fromDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['fromDate'], format)))
@@ -1220,6 +1249,19 @@ class DomainModel(object):
         doc["snippet"] = " ".join(hit['description'][0].split(" ")[0:20])
       if not hit.get('image_url') is None:
         doc["image_url"] = hit['image_url'][0]
+      # else:
+      #   image_hit = get_documents_by_id([hit["id"]], ["html"], es_info['activeDomainIndex'], es_info['docType'], self._es)
+      #   if len(image_hit) > 0 and not image_hit[0].get('html') is None:
+      #     imageURL = getImage(image_hit[0]["html"][0], hit['url'][0])
+      #     entry = {
+      #       session['domainId']: {
+      #         "image_url": imageURL
+      #       }
+      #     }
+      #     update_document(entry, es_info['activeDomainIndex'],  es_info['docType'], self._es)
+      #     print "\n\n\n IMAGE URL ",imageURL, "\n\n\n"
+      #     doc["image_url"] = imageURL
+
       if not hit.get('title') is None:
         doc["title"] = hit['title'][0]
       if not hit.get(es_info['mapping']['tag']) is None:
@@ -1229,13 +1271,16 @@ class DomainModel(object):
       if not hit.get(es_info['mapping']["timestamp"]) is None:
         doc["timestamp"] = hit[es_info['mapping']["timestamp"]]
 
-      docs[hit['url'][0]] = doc
+      if(not hit.get('url') is None):
+        docs[hit['url'][0]] = doc
+      else:
+        print "\n\n\n Could not find URL for ",hit["id"],"\n\n\n"
 
     return docs
 
   def _getMostRecentPages(self, session):
     es_info = self._esInfo(session['domainId'])
-
+    session['pagesCap'] = 50
     hits = []
     if session['fromDate'] is None:
       hits = get_most_recent_documents(session['pagesCap'], es_info['mapping'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
@@ -1312,9 +1357,6 @@ class DomainModel(object):
 
   def _getPagesForMultiCriteria(self, session):
     es_info = self._esInfo(session['domainId'])
-
-    print "\n\nMULTI CRITERIA\n"
-
     s_fields_aux = {}
     if not session['filter'] is None:
       s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
@@ -1326,20 +1368,13 @@ class DomainModel(object):
     n_criteria = session['pageRetrievalCriteria'].keys()
     n_criteria_vals = [val.split(",") for val in session['pageRetrievalCriteria'].values()]
 
-    print "\n\n\n  n_criteria_vals",  n_criteria_vals,"\n\n\n"
-
     criteria_comb = product(*[range(0,len(val)) for val in n_criteria_vals])
 
-    print "\n\n\n  criteria_comb",  criteria_comb,"\n\n\n"
-
     for criteria in criteria_comb:
-      print "\n\n\n  criteria",  criteria,"\n\n\n"
-      print "s_fields_aux", s_fields_aux
       s_fields = s_fields_aux.copy()
       i = 0
       for criterion_index in criteria:
         criterion = n_criteria_vals[i][criterion_index]
-        print "\n\n\n  criterion",criterion,"\n\n\n"
         n_criterion = n_criteria[i]
         if n_criterion == 'tag' and criterion == "Neutral":
           # if s_fields.get("tag"):
@@ -1347,6 +1382,13 @@ class DomainModel(object):
           s_fields["filter"] = {
             "missing" : { "field" : "tag" }
           }
+        elif n_criterion == 'query':
+          if "Crawled Data" in n_criterion:
+            s_fields["filter"] = {
+              "missing" : { "field" : "query" }
+            }
+          else:
+            s_fields[es_info['mapping']["query"]] = n_criterion
         elif(n_criterion in 'Maybe relevant'):
             s_fields["label_neg"] =  1
         elif(n_criterion in 'Maybe irrelevant'):
@@ -1374,19 +1416,26 @@ class DomainModel(object):
   def _getPagesForQueries(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    s_fields = {}
+    s_fields_aux = {}
     if not session['filter'] is None:
-      s_fields[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
+      s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
 
     if not session['fromDate'] is None:
-      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+      s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
     hits=[]
     queries = session['selected_queries'].split(',')
 
     for query in queries:
-      s_fields[es_info['mapping']["query"]] = '"' + query + '"'
-      results= multifield_query_search(s_fields,
+      s_fields = s_fields_aux.copy()
+      if "Crawled Data" in query:
+        s_fields["filter"] = {
+          "missing" : { "field" : "query" }
+        }
+      else:
+        s_fields[es_info['mapping']["query"]] = query
+
+      results= multifield_term_search(s_fields,
                                        session['pagesCap'],
                                        ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
                                        es_info['activeDomainIndex'],
@@ -1907,7 +1956,7 @@ class DomainModel(object):
     label_neg = 0
     unlabeled_urls = []
 
-    MAX_SAMPLE = 1000
+    MAX_SAMPLE = 500
 
     if self._onlineClassifiers.get(session['domainId']) == None:
       return
@@ -1922,11 +1971,11 @@ class DomainModel(object):
       if len(unlabelled_docs) > MAX_SAMPLE:
         unlabelled_docs = sample(unlabelled_docs, MAX_SAMPLE)
 
-      unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
+      unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['text']) is not None]
 
       # Check if unlabeled data available
       if len(unlabeled_text) > 0:
-        unlabeled_urls = [unlabelled_doc[es_info['mapping']['url']][0] for unlabelled_doc in unlabelled_docs]
+        unlabeled_urls = [unlabelled_doc[es_info['mapping']['url']][0] for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['url']) is not None]
         unlabeled_ids = [unlabelled_doc["id"] for unlabelled_doc in unlabelled_docs]
 
         [unlabeled_data,_] =  self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(unlabeled_text)
@@ -1987,7 +2036,69 @@ class DomainModel(object):
         pos_indices = np.nonzero(classp)
         neg_indices = np.where(classp == 0)
 
+#######################################################################################################
+# Run Crawler
+#######################################################################################################
 
+  def startCrawler(self, session):
+    """ Start the ACHE crawler for the specfied domain with the domain model. The
+    results are stored in the same index
+    
+    Parameters:
+    session (json): should have domainId
+    
+    Returns:
+    None
+    """
+  
+    es_info = self._esInfo(session['domainId'])
+
+    data_dir = self._path + "/data/"
+    data_domain  = data_dir + es_info['activeDomainIndex']
+    domainmodel_dir = data_domain + "/models/"
+    domainoutput_dir = data_domain + "/output/"
+
+    if (not isdir(domainmodel_dir)):
+      self.createModel(session, False)
+      if (not isdir(domainmodel_dir)):
+        return "No domain model available"
+
+    ache_home = environ['ACHE_HOME']
+    print "\n\n\n",ache_home,"\n\n\n"
+    comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt" 
+    p = Popen(comm, shell=True, stderr=PIPE)
+    self.runningCrawlers[session['domainId']] = p    
+    output, errors = p.communicate()
+    print output
+    print errors
+
+
+
+    return "Crawler is running"
+
+  def stopCrawler(self, session):
+    """ Stop the ACHE crawler for the specfied domain with the domain model. The
+    results are stored in the same index
+    
+    Parameters:
+    session (json): should have domainId
+    
+    Returns:
+    None
+    """
+    p = self.runningCrawlers[session['domainId']]
+
+    p.terminate()
+
+    print "\n\n\nSHUTTING DOWN\n\n\n"
+    
+    while p.poll() is None:
+      print "\n\n\nCRAWLER SHUTTING DOWN\n\n\n"
+      time.sleep(2)
+
+    print "\n\n\nCrawler Stopped\n\n\n"
+    return "Crawler Stopped"
+  
 #######################################################################################################
 
   def getPlottingData(self, session):

@@ -268,7 +268,6 @@ def field_missing(field, fields, pagesCount, es_index='memex', es_doc_type='page
 
     return results
 
-
 def field_exists(field, fields, pagesCount, es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
