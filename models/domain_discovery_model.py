@@ -26,7 +26,7 @@ from zipfile import ZipFile
 
 from elasticsearch import Elasticsearch
 
-from seeds_generator.download import callDownloadUrls
+from seeds_generator.download import callDownloadUrls, getImage
 from seeds_generator.runSeedFinder import RunSeedFinder
 from seeds_generator.concat_nltk import get_bag_of_words
 from elastic.get_config import get_available_domains, get_mapping, get_tag_colors
@@ -1249,6 +1249,19 @@ class DomainModel(object):
         doc["snippet"] = " ".join(hit['description'][0].split(" ")[0:20])
       if not hit.get('image_url') is None:
         doc["image_url"] = hit['image_url'][0]
+      # else:
+      #   image_hit = get_documents_by_id([hit["id"]], ["html"], es_info['activeDomainIndex'], es_info['docType'], self._es)
+      #   if len(image_hit) > 0 and not image_hit[0].get('html') is None:
+      #     imageURL = getImage(image_hit[0]["html"][0], hit['url'][0])
+      #     entry = {
+      #       session['domainId']: {
+      #         "image_url": imageURL
+      #       }
+      #     }
+      #     update_document(entry, es_info['activeDomainIndex'],  es_info['docType'], self._es)
+      #     print "\n\n\n IMAGE URL ",imageURL, "\n\n\n"
+      #     doc["image_url"] = imageURL
+
       if not hit.get('title') is None:
         doc["title"] = hit['title'][0]
       if not hit.get(es_info['mapping']['tag']) is None:
@@ -1258,13 +1271,16 @@ class DomainModel(object):
       if not hit.get(es_info['mapping']["timestamp"]) is None:
         doc["timestamp"] = hit[es_info['mapping']["timestamp"]]
 
-      docs[hit['url'][0]] = doc
+      if(not hit.get('url') is None):
+        docs[hit['url'][0]] = doc
+      else:
+        print "\n\n\n Could not find URL for ",hit["id"],"\n\n\n"
 
     return docs
 
   def _getMostRecentPages(self, session):
     es_info = self._esInfo(session['domainId'])
-
+    session['pagesCap'] = 50
     hits = []
     if session['fromDate'] is None:
       hits = get_most_recent_documents(session['pagesCap'], es_info['mapping'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
@@ -1342,8 +1358,6 @@ class DomainModel(object):
   def _getPagesForMultiCriteria(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    print "\n\nMULTI CRITERIA\n"
-    
     s_fields_aux = {}
     if not session['filter'] is None:
       s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
@@ -1355,20 +1369,13 @@ class DomainModel(object):
     n_criteria = session['pageRetrievalCriteria'].keys()
     n_criteria_vals = [val.split(",") for val in session['pageRetrievalCriteria'].values()]
 
-    print "\n\n\n  n_criteria_vals",  n_criteria_vals,"\n\n\n"
-
     criteria_comb = product(*[range(0,len(val)) for val in n_criteria_vals])
 
-    print "\n\n\n  criteria_comb",  criteria_comb,"\n\n\n"
-    
     for criteria in criteria_comb:
-      print "\n\n\n  criteria",  criteria,"\n\n\n"
-      print "s_fields_aux", s_fields_aux
       s_fields = s_fields_aux.copy()
       i = 0
       for criterion_index in criteria:
         criterion = n_criteria_vals[i][criterion_index]
-        print "\n\n\n  criterion",criterion,"\n\n\n"
         n_criterion = n_criteria[i]
         if n_criterion == 'tag' and criterion == "Neutral":
           # if s_fields.get("tag"):
@@ -1376,6 +1383,13 @@ class DomainModel(object):
           s_fields["filter"] = {
             "missing" : { "field" : "tag" }
           }
+        elif n_criterion == 'query':
+          if "Crawled Data" in n_criterion:
+            s_fields["filter"] = {
+              "missing" : { "field" : "query" }
+            }
+          else:
+            s_fields[es_info['mapping']["query"]] = n_criterion
         elif(n_criterion in 'Maybe relevant'):
             s_fields["label_neg"] =  1
         elif(n_criterion in 'Maybe irrelevant'):
@@ -1422,8 +1436,6 @@ class DomainModel(object):
       else:
         s_fields[es_info['mapping']["query"]] = query
 
-      print "\n\n\n",s_fields,"\n\n\n"
-      
       results= multifield_term_search(s_fields,
                                        session['pagesCap'],
                                        ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
@@ -1957,11 +1969,11 @@ class DomainModel(object):
       if len(unlabelled_docs) > MAX_SAMPLE:
         unlabelled_docs = sample(unlabelled_docs, MAX_SAMPLE)
 
-      unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
+      unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['text']) is not None]
 
       # Check if unlabeled data available
       if len(unlabeled_text) > 0:
-        unlabeled_urls = [unlabelled_doc[es_info['mapping']['url']][0] for unlabelled_doc in unlabelled_docs]
+        unlabeled_urls = [unlabelled_doc[es_info['mapping']['url']][0] for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['url']) is not None]
         unlabeled_ids = [unlabelled_doc["id"] for unlabelled_doc in unlabelled_docs]
 
         [unlabeled_data,_] =  self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(unlabeled_text)
@@ -2078,7 +2090,7 @@ class DomainModel(object):
     print "\n\n\nSHUTTING DOWN\n\n\n"
     
     while p.poll() is None:
-      print "\n\n\nSHUTTING DOWN\n\n\n"
+      print "\n\n\nCRAWLER SHUTTING DOWN\n\n\n"
       time.sleep(2)
 
     print "\n\n\nCrawler Stopped\n\n\n"
