@@ -2052,11 +2052,12 @@ class DomainModel(object):
     print "\n\n\n",ache_home,"\n\n\n"
     comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainmodel_dir + " -s " + data_domain + "/seeds.txt" 
     p = Popen(comm, shell=True, stderr=PIPE)
+    self.runningCrawlers[session['domainId']] = p    
     output, errors = p.communicate()
     print output
     print errors
 
-    self.runningCrawlers[session['domainId']] = p
+
 
     return "Crawler is running"
 
@@ -2071,12 +2072,16 @@ class DomainModel(object):
     None
     """
     p = self.runningCrawlers[session['domainId']]
-    
+
     p.terminate()
 
+    print "\n\n\nSHUTTING DOWN\n\n\n"
+    
     while p.poll() is None:
-      sleep(2)
+      print "\n\n\nSHUTTING DOWN\n\n\n"
+      time.sleep(2)
 
+    print "\n\n\nCrawler Stopped\n\n\n"
     return "Crawler Stopped"
   
 #######################################################################################################
