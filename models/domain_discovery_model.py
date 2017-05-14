@@ -1750,12 +1750,16 @@ class DomainModel(object):
     print errors
 
     if zip:
-      print data_domain
+      print data_dir
       print es_info['activeDomainIndex']
-      zip_filename = data_domain + "_model.zip"
+      zip_dir = data_dir 
       #Create tha model in the client (client/build/models/). Just the client site is being exposed
-      saveClientSite = zip_filename.replace('server/data/','client/build/models/')
-      with ZipFile(saveClientSite, "w") as modelzip:
+      saveClientSite = zip_dir.replace('server/data/','client/build/models/')
+      if (not isdir(saveClientSite)):
+        makedirs(saveClientSite)
+      zip_filename = saveClientSite + es_info['activeDomainIndex'] + "_model.zip"
+
+      with ZipFile(zip_filename, "w") as modelzip:
         if (isfile(domainmodel_dir + "/pageclassifier.features")):
           print "zipping file: "+domainmodel_dir + "/pageclassifier.features"
           modelzip.write(domainmodel_dir + "/pageclassifier.features", "pageclassifier.features")
@@ -1779,7 +1783,7 @@ class DomainModel(object):
         if (isfile(data_domain +"/seeds.txt")):
           print "zipping file: "+data_domain +"/seeds.txt"
           modelzip.write(data_domain +"/seeds.txt", es_info['activeDomainIndex'] + "_seeds.txt")
-        chmod(saveClientSite, 0o777)
+        chmod(zip_filename, 0o777)
 
       return "models/" + es_info['activeDomainIndex'] + "_model.zip"
     else:
