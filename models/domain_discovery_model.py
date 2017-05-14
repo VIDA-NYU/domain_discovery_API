@@ -1383,12 +1383,12 @@ class DomainModel(object):
             "missing" : { "field" : "tag" }
           }
         elif n_criterion == 'query':
-          if "Crawled Data" in n_criterion:
+          if "Crawled Data" in criterion:
             s_fields["filter"] = {
               "missing" : { "field" : "query" }
             }
           else:
-            s_fields[es_info['mapping']["query"]] = n_criterion
+            s_fields[es_info['mapping']["query"]] = criterion
         elif(n_criterion in 'Maybe relevant'):
             s_fields["label_neg"] =  1
         elif(n_criterion in 'Maybe irrelevant'):
