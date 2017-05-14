@@ -1954,7 +1954,7 @@ class DomainModel(object):
     label_neg = 0
     unlabeled_urls = []
 
-    MAX_SAMPLE = 1000
+    MAX_SAMPLE = 500
 
     if self._onlineClassifiers.get(session['domainId']) == None:
       return
@@ -2054,6 +2054,7 @@ class DomainModel(object):
     data_dir = self._path + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
     domainmodel_dir = data_domain + "/models/"
+    domainoutput_dir = data_domain + "/output/"
 
     if (not isdir(domainmodel_dir)):
       self.createModel(session, False)
@@ -2062,7 +2063,7 @@ class DomainModel(object):
 
     ache_home = environ['ACHE_HOME']
     print "\n\n\n",ache_home,"\n\n\n"
-    comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainmodel_dir + " -s " + data_domain + "/seeds.txt" 
+    comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt" 
     p = Popen(comm, shell=True, stderr=PIPE)
     self.runningCrawlers[session['domainId']] = p    
     output, errors = p.communicate()
