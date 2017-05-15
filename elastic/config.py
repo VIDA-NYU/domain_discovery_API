@@ -26,10 +26,10 @@ print 'ELASTICSEARCH_SERVER ', es_server
 
 if environ.get('ELASTICSEARCH_USER'):
     es_user = environ['ELASTICSEARCH_USER']
-else: 
+else:
     es_user = ""
 
-if es_user !== "":
+if es_user != "":
     print 'ELASTICSEARCH_USER ', es_user
 
 if environ.get('ELASTICSEARCH_PASSWD'):
@@ -49,5 +49,3 @@ if environ.get('ELASTICSEARCH_DOC_TYPE'):
     es_doc_type = environ['ELASTICSEARCH_DOC_TYPE']
 else:
     es_doc_type = 'page'
-
-
