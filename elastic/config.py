@@ -29,7 +29,8 @@ if environ.get('ELASTICSEARCH_USER'):
 else: 
     es_user = ""
 
-print 'ELASTICSEARCH_USER ', es_user
+if es_user !== "":
+    print 'ELASTICSEARCH_USER ', es_user
 
 if environ.get('ELASTICSEARCH_PASSWD'):
     es_passwd = environ['ELASTICSEARCH_PASSWD']
