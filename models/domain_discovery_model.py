@@ -108,18 +108,16 @@ class DomainModel(object):
     with open(self._path+"/ache.yml","w") as fw:
       with open(self._path+"/ache.yml-in","r") as fr:
         for line in fr.readlines():
-          if "target_storage.data_format.type: ELASTICSEARCH" in line:
-            fw.write("target_storage.data_format.type: ELASTICSEARCH"+"\n")
-          elif "target_storage.data_format.elasticsearch.host:" in line:  
-            fw.write("target_storage.data_format.elasticsearch.host: " +es_server+"\n")
-          elif "target_storage.data_format.elasticsearch.port:" in line:            
-            fw.write("target_storage.data_format.elasticsearch.port: 9300"+"\n")
-          elif "target_storage.data_format.elasticsearch.cluster_name:" in line:
-            fw.write("target_storage.data_format.elasticsearch.cluster_name: elasticsearch"+"\n")
-          elif "target_storage.data_format.elasticsearch.rest.hosts:" in line:
+          if "target_storage.data_format.elasticsearch.rest.hosts:" in line:
             fw.write("target_storage.data_format.elasticsearch.rest.hosts:" + "\n")
           elif "- http://localhost:9200" in line:
             fw.write("  - http://"+es_server+":9200" + "\n")
+          elif "target_storage.data_format.elasticsearch.rest.connect_timeout: 30000" in line:
+            fw.write("target_storage.data_format.elasticsearch.rest.connect_timeout: 30000" + "\n")
+          elif "target_storage.data_format.elasticsearch.rest.socket_timeout: 30000" in line:
+            fw.write("target_storage.data_format.elasticsearch.rest.socket_timeout: 30000" + "\n")
+          elif "target_storage.data_format.elasticsearch.rest.max_retry_timeout_millis: 90000" in line:
+            fw.write("target_storage.data_format.elasticsearch.rest.max_retry_timeout_millis: 90000" + "\n")
           else:
             fw.write(line)
             
