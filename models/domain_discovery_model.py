@@ -119,7 +119,7 @@ class DomainModel(object):
           elif "target_storage.data_format.elasticsearch.rest.hosts:" in line:
             fw.write("target_storage.data_format.elasticsearch.rest.hosts:" + "\n")
           elif "- http://localhost:9200" in line:
-            fw.write("  - http://localhost:9200" + "\n")
+            fw.write("  - http://"+es_server+":9200" + "\n")
           else:
             fw.write(line)
             
