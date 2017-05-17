@@ -6,6 +6,8 @@ from dateutil import tz
 from sets import Set
 from itertools import product
 import json;
+from signal import SIGTERM
+import shlex
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -2068,7 +2070,7 @@ class DomainModel(object):
     ache_home = environ['ACHE_HOME']
     print "\n\n\n",ache_home,"\n\n\n"
     comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt" 
-    p = Popen(comm, shell=True, stderr=PIPE)
+    p = Popen(shlex.split(comm))
     self.runningCrawlers[session['domainId']] = p    
     output, errors = p.communicate()
     print output
@@ -2094,10 +2096,8 @@ class DomainModel(object):
 
     print "\n\n\nSHUTTING DOWN\n\n\n"
     
-    while p.poll() is None:
-      print "\n\n\nCRAWLER SHUTTING DOWN\n\n\n"
-      time.sleep(2)
-
+    p.wait()
+    
     print "\n\n\nCrawler Stopped\n\n\n"
     return "Crawler Stopped"
   
