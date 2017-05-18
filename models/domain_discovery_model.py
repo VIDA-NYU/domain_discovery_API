@@ -1377,8 +1377,6 @@ class DomainModel(object):
         criterion = n_criteria_vals[i][criterion_index]
         n_criterion = n_criteria[i]
         if n_criterion == 'tag' and criterion == "Neutral":
-          # if s_fields.get("tag"):
-          #   s_fields.pop("tag")
           s_fields["filter"] = {
             "missing" : { "field" : "tag" }
           }
@@ -1389,11 +1387,12 @@ class DomainModel(object):
             }
           else:
             s_fields[es_info['mapping']["query"]] = criterion
-        elif(n_criterion in 'Maybe relevant'):
+        elif n_criterion == 'model_tag':
+          if criterion in 'Maybe relevant':
             s_fields["label_neg"] =  1
-        elif(n_criterion in 'Maybe irrelevant'):
+          elif criterion in 'Maybe irrelevant':
             s_fields["label_pos"] =  1
-        elif(n_criterion in 'Unsure'):
+          elif criterion in 'Unsure':
             s_fields["unsure_tag"] =  1
         else:
           s_fields[n_criterion] =  criterion
@@ -1402,8 +1401,7 @@ class DomainModel(object):
                                       es_info['activeDomainIndex'],
                                       es_info['docType'],
                                       self._es)
-      # if s_fields.get("filter") is not None:
-      #   s_fields.pop("filter")
+
       if session['selected_morelike']=="moreLike":
         morelike_result = self._getMoreLikePagesAll(session, results)
         hits.extend(morelike_result)
@@ -1967,13 +1965,20 @@ class DomainModel(object):
 
     sigmoid = self._onlineClassifiers[session['domainId']].get("sigmoid")
     if sigmoid != None:
-      unlabelled_docs = field_missing(es_info["mapping"]["tag"], ["url", es_info["mapping"]["text"]], self._all,
+      unlabelled_docs = field_missing(es_info["mapping"]["tag"], [es_info['mapping']['url']], self._all,
                                       es_info['activeDomainIndex'],
                                       es_info['docType'],
                                       self._es)
 
       if len(unlabelled_docs) > MAX_SAMPLE:
         unlabelled_docs = sample(unlabelled_docs, MAX_SAMPLE)
+
+      unlabelled_docs_ids = [doc["id"] for doc in unlabelled_docs]
+
+      unlabelled_docs = get_documents_by_id(unlabelled_docs_ids, [es_info['mapping']['url'], es_info['mapping']['text']],
+                                            es_info['activeDomainIndex'],
+                                            es_info['docType'],
+                                            self._es)
 
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['text']) is not None]
 
