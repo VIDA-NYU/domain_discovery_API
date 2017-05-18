@@ -108,20 +108,34 @@ class DomainModel(object):
   def _initACHE(self):
 
     with open(self._path+"/ache.yml","w") as fw:
-      with open(self._path+"/ache.yml-in","r") as fr:
-        for line in fr.readlines():
-          if "target_storage.data_format.elasticsearch.rest.hosts:" in line:
-            fw.write("target_storage.data_format.elasticsearch.rest.hosts:" + "\n")
-          elif "- http://localhost:9200" in line:
-            fw.write("  - http://"+es_server+":9200" + "\n")
-          elif "target_storage.data_format.elasticsearch.rest.connect_timeout: 30000" in line:
-            fw.write("target_storage.data_format.elasticsearch.rest.connect_timeout: 30000" + "\n")
-          elif "target_storage.data_format.elasticsearch.rest.socket_timeout: 30000" in line:
-            fw.write("target_storage.data_format.elasticsearch.rest.socket_timeout: 30000" + "\n")
-          elif "target_storage.data_format.elasticsearch.rest.max_retry_timeout_millis: 90000" in line:
-            fw.write("target_storage.data_format.elasticsearch.rest.max_retry_timeout_millis: 90000" + "\n")
-          else:
-            fw.write(line)
+      fw.write("#" + "\n")
+      fw.write("# Example of configuration for running a Focused Crawl" + "\n")
+      fw.write("#" + "\n")
+      fw.write("target_storage.use_classifier: true" + "\n")
+      fw.write("target_storage.store_negative_pages: true" + "\n")
+      fw.write("target_storage.data_format.type: ELASTICSEARCH" + "\n")
+      fw.write("target_storage.data_format.elasticsearch.rest.hosts:" + "\n")
+      fw.write("  - http://" + es_server + ":9200" + "\n")
+      fw.write("target_storage.english_language_detection_enabled: false" + "\n")
+
+      fw.write("link_storage.max_pages_per_domain: 1000" + "\n")
+      fw.write("link_storage.link_strategy.use_scope: false" + "\n")
+      fw.write("link_storage.link_strategy.outlinks: true" + "\n")
+      fw.write("link_storage.link_strategy.backlinks: false" + "\n")
+      fw.write("link_storage.link_classifier.type: LinkClassifierBaseline" + "\n")
+      fw.write("link_storage.online_learning.enabled: true" + "\n")
+              
+      fw.write("link_storage.online_learning.type: FORWARD_CLASSIFIER_BINARY" + "\n")
+      fw.write("link_storage.online_learning.learning_limit: 1000" + "\n")
+      fw.write("link_storage.link_selector: TopkLinkSelector" + "\n")
+      fw.write("link_storage.scheduler.host_min_access_interval: 5000" + "\n")
+      fw.write("link_storage.scheduler.max_links: 10000" + "\n")
+
+      fw.write("crawler_manager.downloader.user_agent.name: ACHE" + "\n")
+      fw.write("crawler_manager.downloader.user_agent.url: https://github.com/ViDA-NYU/ache" + "\n")
+      fw.write("crawler_manager.downloader.valid_mime_types:" + "\n")
+      fw.write(" - text/html" + "\n")
+
             
   def setPath(self, path):
     self._path = path
@@ -2059,31 +2073,31 @@ class DomainModel(object):
     Returns:
     None
     """
-  
-    es_info = self._esInfo(session['domainId'])
 
-    data_dir = self._path + "/data/"
-    data_domain  = data_dir + es_info['activeDomainIndex']
-    domainmodel_dir = data_domain + "/models/"
-    domainoutput_dir = data_domain + "/output/"
+    if len(self.runningCrawlers.keys()) == 0:
+        es_info = self._esInfo(session['domainId'])
 
-    if (not isdir(domainmodel_dir)):
-      self.createModel(session, False)
-      if (not isdir(domainmodel_dir)):
-        return "No domain model available"
+        data_dir = self._path + "/data/"
+        data_domain  = data_dir + es_info['activeDomainIndex']
+        domainmodel_dir = data_domain + "/models/"
+        domainoutput_dir = data_domain + "/output/"
 
-    ache_home = environ['ACHE_HOME']
-    print "\n\n\n",ache_home,"\n\n\n"
-    comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt" 
-    p = Popen(shlex.split(comm))
-    self.runningCrawlers[session['domainId']] = p    
-    output, errors = p.communicate()
-    print output
-    print errors
+        if (not isdir(domainmodel_dir)):
+            self.createModel(session, False)
+        if (not isdir(domainmodel_dir)):
+            return "No domain model available"
 
+        ache_home = environ['ACHE_HOME']
+        print "\n\n\n",ache_home,"\n\n\n"
+        comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt" 
+        p = Popen(shlex.split(comm))
+        self.runningCrawlers[session['domainId']] = p    
+        # output, errors = p.communicate()
+        # print output
+        # print errors
 
-
-    return "Crawler is running"
+        return "Crawler is running"
+    return "Crawler running for domain " + self._domains[self.runningCrawlers.keys()[0]]['index']
 
   def stopCrawler(self, session):
     """ Stop the ACHE crawler for the specfied domain with the domain model. The
