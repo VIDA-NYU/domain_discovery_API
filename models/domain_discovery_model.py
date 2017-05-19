@@ -1,6 +1,7 @@
 import time
 import calendar
 import os
+import shutil
 from datetime import datetime
 from dateutil import tz
 from sets import Set
@@ -430,8 +431,15 @@ class DomainModel(object):
       ddt_terms_keys = [doc["id"] for doc in term_search("index", [index], self._all, ["term"], "ddt_terms", "terms", self._es)]
       delete_document(ddt_terms_keys, "ddt_terms", "terms", self._es)
 
+      #Delete all the data for the index
+      data_dir = self._path + "/data/"
+      data_domain  = data_dir + index
+      if isdir(data_domain):
+        shutil.rmtree(data_domain)
+
     # Delete indices from config index
     delete_document(domains.keys(), "config", "domains", self._es)
+    
 
   def updateColors(self, session, colors):
     es_info = self._esInfo(session['domainId'])
@@ -642,6 +650,7 @@ class DomainModel(object):
        Returns string "Completed Process"
 
     """
+
     es_info = self._esInfo(session['domainId'])
 
     entries = {}
@@ -1755,7 +1764,7 @@ class DomainModel(object):
       makedirs(domainmodel_dir)
 
     ache_home = environ['ACHE_HOME']
-    comm = ache_home + "/bin/ache buildModel -t " + data_training + " -o "+ domainmodel_dir + " -c " + ache_home + "/config/stoplist.txt"
+    comm = ache_home + "/bin/ache buildModel -t " + data_training + " -o "+ domainmodel_dir + " -c " + ache_home + "/config/sample_config/stoplist.txt"
     p = Popen(comm, shell=True, stderr=PIPE)
     output, errors = p.communicate()
     print output
