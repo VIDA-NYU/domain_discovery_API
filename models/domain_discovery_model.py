@@ -90,7 +90,7 @@ class DomainModel(object):
     self.runningCrawlers={}
 
     self._initACHE()
-    
+
   def _encode(self, url):
     return urllib2.quote(url).replace("/", "%2F")
 
@@ -124,7 +124,7 @@ class DomainModel(object):
       fw.write("link_storage.link_strategy.backlinks: false" + "\n")
       fw.write("link_storage.link_classifier.type: LinkClassifierBaseline" + "\n")
       fw.write("link_storage.online_learning.enabled: true" + "\n")
-              
+
       fw.write("link_storage.online_learning.type: FORWARD_CLASSIFIER_BINARY" + "\n")
       fw.write("link_storage.online_learning.learning_limit: 1000" + "\n")
       fw.write("link_storage.link_selector: TopkLinkSelector" + "\n")
@@ -136,7 +136,7 @@ class DomainModel(object):
       fw.write("crawler_manager.downloader.valid_mime_types:" + "\n")
       fw.write(" - text/html" + "\n")
 
-            
+
   def setPath(self, path):
     self._path = path
 
@@ -196,7 +196,7 @@ class DomainModel(object):
     crawlData = field_missing('query', [self._mapping["url"]], self._all,es_info['activeDomainIndex'], es_info['docType'], self._es)
     if len(crawlData) > 0:
       queries["Crawled Data"] = len(crawlData)
-    
+
     return queries
 
   def getAvailableTags(self, session):
@@ -1764,7 +1764,7 @@ class DomainModel(object):
     if zip:
       print data_dir
       print es_info['activeDomainIndex']
-      zip_dir = data_dir 
+      zip_dir = data_dir
       #Create tha model in the client (client/build/models/). Just the client site is being exposed
       saveClientSite = zip_dir.replace('server/data/','client/build/models/')
       if (not isdir(saveClientSite)):
@@ -2066,10 +2066,10 @@ class DomainModel(object):
   def startCrawler(self, session):
     """ Start the ACHE crawler for the specfied domain with the domain model. The
     results are stored in the same index
-    
+
     Parameters:
     session (json): should have domainId
-    
+
     Returns:
     None
     """
@@ -2089,10 +2089,10 @@ class DomainModel(object):
 
         ache_home = environ['ACHE_HOME']
         print "\n\n\n",ache_home,"\n\n\n"
-        comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt" 
+        comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt"
         p = Popen(shlex.split(comm))
-        self.runningCrawlers[session['domainId']] = p    
-        # output, errors = p.communicate()
+        self.runningCrawlers[session['domainId']] = p
+        output, errors = p.communicate()
         # print output
         # print errors
 
@@ -2102,10 +2102,10 @@ class DomainModel(object):
   def stopCrawler(self, session):
     """ Stop the ACHE crawler for the specfied domain with the domain model. The
     results are stored in the same index
-    
+
     Parameters:
     session (json): should have domainId
-    
+
     Returns:
     None
     """
@@ -2114,12 +2114,12 @@ class DomainModel(object):
     p.terminate()
 
     print "\n\n\nSHUTTING DOWN\n\n\n"
-    
+
     p.wait()
-    
+    self.runningCrawlers={}
     print "\n\n\nCrawler Stopped\n\n\n"
     return "Crawler Stopped"
-  
+
 #######################################################################################################
 
   def getPlottingData(self, session):
