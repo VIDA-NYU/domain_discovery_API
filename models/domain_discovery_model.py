@@ -1812,21 +1812,23 @@ class DomainModel(object):
 
 
   def updateOnlineClassifier(self, session):
-    es_info = self._esInfo(session['domainId'])
-
+    domainId = session['domainId']
+    es_info = self._esInfo(domainId)
+    
     onlineClassifier = None
     trainedPosSamples = []
     trainedNegSamples = []
-    onlineClassifierInfo = self._onlineClassifiers.get(session['domainId'])
+    onlineClassifierInfo = self._onlineClassifiers.get(domainId)
+
     if onlineClassifierInfo == None:
       onlineClassifier = OnlineClassifier()
-      self._onlineClassifiers[session['domainId']] = {"onlineClassifier":onlineClassifier}
-      self._onlineClassifiers[session['domainId']]["trainedPosSamples"] = []
-      self._onlineClassifiers[session['domainId']]["trainedNegSamples"] = []
+      self._onlineClassifiers[domainId] = {"onlineClassifier":onlineClassifier}
+      self._onlineClassifiers[domainId]["trainedPosSamples"] = []
+      self._onlineClassifiers[domainId]["trainedNegSamples"] = []
     else:
-      onlineClassifier = self._onlineClassifiers[session['domainId']]["onlineClassifier"]
-      trainedPosSamples = self._onlineClassifiers[session['domainId']]["trainedPosSamples"]
-      trainedNegSamples = self._onlineClassifiers[session['domainId']]["trainedNegSamples"]
+      onlineClassifier = self._onlineClassifiers[domainId]["onlineClassifier"]
+      trainedPosSamples = self._onlineClassifiers[domainId]["trainedPosSamples"]
+      trainedNegSamples = self._onlineClassifiers[domainId]["trainedNegSamples"]
 
     # Fit classifier
     # ****************************************************************************************
@@ -1888,12 +1890,12 @@ class DomainModel(object):
 
     clf = None
     train_data = None
-    if pos_text or neg_text:
-      [train_data,_] = self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(pos_text+neg_text)
-      clf = self._onlineClassifiers[session['domainId']]["onlineClassifier"].partialFit(train_data, pos_labels+neg_labels)
+    if (pos_text or neg_text) and (len(trainedPosSamples) > 0 and len(trainedNegSamples) > 0):
+      [train_data,_] = self._onlineClassifiers[domainId]["onlineClassifier"].vectorize(pos_text+neg_text)
+      clf = self._onlineClassifiers[domainId]["onlineClassifier"].partialFit(train_data, pos_labels+neg_labels)
       if clf != None:
-        self._onlineClassifiers[session['domainId']]["trainedPosSamples"] = self._onlineClassifiers[session['domainId']]["trainedPosSamples"] + pos_ids
-        self._onlineClassifiers[session['domainId']]["trainedNegSamples"] = self._onlineClassifiers[session['domainId']]["trainedNegSamples"] + neg_ids
+        self._onlineClassifiers[domainId]["trainedPosSamples"] = self._onlineClassifiers[domainId]["trainedPosSamples"] + pos_ids
+        self._onlineClassifiers[domainId]["trainedNegSamples"] = self._onlineClassifiers[domainId]["trainedNegSamples"] + neg_ids
 
     # ****************************************************************************************
 
@@ -1901,8 +1903,8 @@ class DomainModel(object):
 
     if train_data != None and clf != None:
 
-      trainedPosSamples = self._onlineClassifiers[session['domainId']]["trainedPosSamples"]
-      trainedNegSamples = self._onlineClassifiers[session['domainId']]["trainedNegSamples"]
+      trainedPosSamples = self._onlineClassifiers[domainId]["trainedPosSamples"]
+      trainedNegSamples = self._onlineClassifiers[domainId]["trainedNegSamples"]
       if 2*len(trainedPosSamples)/3  > 2 and  2*len(trainedNegSamples)/3 > 2:
         pos_trained_docs = get_documents_by_id(trainedPosSamples,
                                                ["url", es_info['mapping']['text']],
@@ -1920,8 +1922,8 @@ class DomainModel(object):
 
         neg_trained_text = [neg_trained_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for neg_trained_doc in neg_trained_docs]
         neg_trained_labels = [0 for i in range(0, len(neg_trained_text))]
-        [calibrate_pos_data,_] = self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(pos_trained_text)
-        [calibrate_neg_data,_] = self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(neg_trained_text)
+        [calibrate_pos_data,_] = self._onlineClassifiers[domainId]["onlineClassifier"].vectorize(pos_trained_text)
+        [calibrate_neg_data,_] = self._onlineClassifiers[domainId]["onlineClassifier"].vectorize(neg_trained_text)
         calibrate_pos_labels = pos_trained_labels
         calibrate_neg_labels = neg_trained_labels
 
@@ -1933,9 +1935,9 @@ class DomainModel(object):
 
         sigmoid = onlineClassifier.calibrate(calibrate_data[train_indices], np.asarray(calibrate_labels)[train_indices])
         if not sigmoid is None:
-          self._onlineClassifiers[session['domainId']]["sigmoid"] = sigmoid
-          accuracy = round(self._onlineClassifiers[session['domainId']]["onlineClassifier"].calibrateScore(sigmoid, calibrate_data[test_indices], np.asarray(calibrate_labels)[test_indices]), 4) * 100
-          self._onlineClassifiers[session['domainId']]["accuracy"] = str(accuracy)
+          self._onlineClassifiers[domainId]["sigmoid"] = sigmoid
+          accuracy = round(self._onlineClassifiers[domainId]["onlineClassifier"].calibrateScore(sigmoid, calibrate_data[test_indices], np.asarray(calibrate_labels)[test_indices]), 4) * 100
+          self._onlineClassifiers[domainId]["accuracy"] = str(accuracy)
 
           print "\n\n\n Accuracy = ", accuracy, "%\n\n\n"
         else:
@@ -1947,8 +1949,8 @@ class DomainModel(object):
 
 
     accuracy = '0'
-    if self._onlineClassifiers.get(session['domainId']) != None:
-      accuracy = self._onlineClassifiers[session['domainId']].get("accuracy")
+    if self._onlineClassifiers.get(domainId) != None:
+      accuracy = self._onlineClassifiers[domainId].get("accuracy")
       if accuracy == None:
         accuracy = '0'
 
