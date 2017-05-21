@@ -52,6 +52,14 @@ class Page(object):
     # TODO Use SeedCrawlerModelAdapter self._model = SeedCrawlerModelAdapter()
     self._model = model
 
+
+  @cherrypy.expose
+  def getStatus(self, session):
+    session = json.loads(session)
+    res = self._model.getStatus(session)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(res)
+  
   # Returns a list of available crawlers in the format:
   # [
   #   {'id': crawlerId, 'name': crawlerName, 'creation': epochInSecondsOfFirstDownloadedURL},

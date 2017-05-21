@@ -141,6 +141,16 @@ class DomainModel(object):
   def setPath(self, path):
     self._path = path
 
+  def getStatus(self, session):
+    domainId = session['domainId']
+    status = {}
+    if self.runningCrawlers.get(domainId) is not None:
+      print "\n\n\n RUNNING CRAWLERS ", self.runningCrawlers,"\n\n\n"
+      status["crawler"] = self.runningCrawlers[domainId]['message']
+
+    print "\n\n\n Status ",status,"\n\n\n" 
+    return status
+    
   def getAvailableProjectionAlgorithms(self):
     return [{'name': key} for key in self.projectionsAlg.keys()]
 
@@ -1890,12 +1900,20 @@ class DomainModel(object):
 
     clf = None
     train_data = None
-    if (pos_text or neg_text) and (len(trainedPosSamples) > 0 and len(trainedNegSamples) > 0):
-      [train_data,_] = self._onlineClassifiers[domainId]["onlineClassifier"].vectorize(pos_text+neg_text)
-      clf = self._onlineClassifiers[domainId]["onlineClassifier"].partialFit(train_data, pos_labels+neg_labels)
-      if clf != None:
-        self._onlineClassifiers[domainId]["trainedPosSamples"] = self._onlineClassifiers[domainId]["trainedPosSamples"] + pos_ids
-        self._onlineClassifiers[domainId]["trainedNegSamples"] = self._onlineClassifiers[domainId]["trainedNegSamples"] + neg_ids
+    update = False
+    if (len(trainedPosSamples) > 0 and len(trainedNegSamples) > 0):
+      if (len(pos_text) > 0 or len(neg_text) > 0):
+        update = True
+    else:
+      if (len(pos_text) > 0 and len(neg_text) > 0):
+        update = True
+    if update:
+      if self._onlineClassifiers.get(domainId) is not None:
+        [train_data,_] = self._onlineClassifiers[domainId]["onlineClassifier"].vectorize(pos_text+neg_text)
+        clf = self._onlineClassifiers[domainId]["onlineClassifier"].partialFit(train_data, pos_labels+neg_labels)
+        if clf != None:
+          self._onlineClassifiers[domainId]["trainedPosSamples"] = self._onlineClassifiers[domainId]["trainedPosSamples"] + pos_ids
+          self._onlineClassifiers[domainId]["trainedNegSamples"] = self._onlineClassifiers[domainId]["trainedNegSamples"] + neg_ids
 
     # ****************************************************************************************
 
@@ -2085,30 +2103,37 @@ class DomainModel(object):
     None
     """
 
+    domainId = session['domainId']
+    
+    if self.runningCrawlers.get(domainId) is not None:
+      return self.runningCrawlers[domainId]['message']
+    
     if len(self.runningCrawlers.keys()) == 0:
-        es_info = self._esInfo(session['domainId'])
-
-        data_dir = self._path + "/data/"
-        data_domain  = data_dir + es_info['activeDomainIndex']
-        domainmodel_dir = data_domain + "/models/"
-        domainoutput_dir = data_domain + "/output/"
-
-        if (not isdir(domainmodel_dir)):
-            self.createModel(session, False)
-        if (not isdir(domainmodel_dir)):
-            return "No domain model available"
-
-        ache_home = environ['ACHE_HOME']
-        print "\n\n\n",ache_home,"\n\n\n"
-        comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt"
-        p = Popen(shlex.split(comm))
-        self.runningCrawlers[session['domainId']] = p
-        output, errors = p.communicate()
-        # print output
-        # print errors
-
-        return "Crawler is running"
-    return "Crawler running for domain " + self._domains[self.runningCrawlers.keys()[0]]['index']
+      es_info = self._esInfo(domainId)
+      
+      data_dir = self._path + "/data/"
+      data_domain  = data_dir + es_info['activeDomainIndex']
+      domainmodel_dir = data_domain + "/models/"
+      domainoutput_dir = data_domain + "/output/"
+      
+      if (not isdir(domainmodel_dir)):
+        self.createModel(session, False)
+      if (not isdir(domainmodel_dir)):
+        return "No domain model available"
+      
+      ache_home = environ['ACHE_HOME']
+      print "\n\n\n",ache_home,"\n\n\n"
+      comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt"
+      p = Popen(shlex.split(comm))
+      self.runningCrawlers[domainId] = {'process': p}
+      #output, errors = p.communicate()
+      # print output
+      # print errors
+      
+      self.runningCrawlers[domainId]['message'] = "Crawler is running"
+      
+      return "Crawler is running"
+    return "Crawler running for domain: " + self._domains[self.runningCrawlers.keys()[0]]['index']
 
   def stopCrawler(self, session):
     """ Stop the ACHE crawler for the specfied domain with the domain model. The
@@ -2120,14 +2145,21 @@ class DomainModel(object):
     Returns:
     None
     """
-    p = self.runningCrawlers[session['domainId']]
+
+    domainId = session['domainId']
+    
+    p = self.runningCrawlers[domainId]['process']
 
     p.terminate()
 
     print "\n\n\nSHUTTING DOWN\n\n\n"
 
+    self.runningCrawlers[domainId]['message'] = "Crawler shutting down"
+    
     p.wait()
-    self.runningCrawlers={}
+
+    self.runningCrawlers.pop(domainId)
+    
     print "\n\n\nCrawler Stopped\n\n\n"
     return "Crawler Stopped"
 
