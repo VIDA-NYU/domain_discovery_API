@@ -500,21 +500,20 @@ class DomainModel(object):
       top = int(session['pagesCap'])
     else:
       top = max_url_count
-
+      
     if 'GOOG' in session['search_engine']:
-      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -t " + str(top) + \
-             " -q \"" + terms + "\"" + \
-             " -i " + es_info['activeDomainIndex'] + \
-             " -d " + es_info['docType'] + \
-             " -s " + es_server
+      comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -t ' + str(top) + \
+             ' -q "' + terms.replace('"','\\"')  + '"' + \
+             ' -i ' + es_info['activeDomainIndex'] + \
+             ' -d ' + es_info['docType'] + \
+             ' -s ' + es_server
 
     elif 'BING' in session['search_engine']:
-      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar BingSearch -t " + str(top) + \
-             " -q \"" + terms + "\"" + \
-             " -i " + es_info['activeDomainIndex'] + \
-             " -d " + es_info['docType'] + \
-             " -s " + es_server
-
+      comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar BingSearch -t ' + str(top) + \
+             ' -q "' + terms.replace('"','\\"') + '"' + \
+             ' -i ' + es_info['activeDomainIndex'] + \
+             ' -d ' + es_info['docType'] + \
+             ' -s ' + es_server
 
     p=Popen(comm, shell=True, stdout=PIPE)
     output, errors = p.communicate()
