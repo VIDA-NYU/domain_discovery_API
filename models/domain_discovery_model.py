@@ -66,7 +66,7 @@ class DomainModel(object):
 
   def __init__(self, path=""):
     self._es = None
-    self._all = 10000
+    self._all = 100000
     self._termsIndex = "ddt_terms"
     self._pagesCapTerms = 100
     self._capTerms = 500
@@ -2132,7 +2132,7 @@ class DomainModel(object):
       self.runningCrawlers[domainId]['message'] = "Crawler is running"
       
       return "Crawler is running"
-    return "Crawler running for domain: " + self._domains[self.runningCrawlers.keys()[0]]['index']
+    return "Crawler running for domain: " + self._domains[self.runningCrawlers.keys()[0]]['domain_name']
 
   def stopCrawler(self, session):
     """ Stop the ACHE crawler for the specfied domain with the domain model. The
