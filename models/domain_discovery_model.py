@@ -204,9 +204,19 @@ class DomainModel(object):
     """
     es_info = self._esInfo(session['domainId'])
     queries = get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
-    crawlData = field_missing('query', [self._mapping["url"]], self._all,es_info['activeDomainIndex'], es_info['docType'], self._es)
-    if len(crawlData) > 0:
-      queries["Crawled Data"] = len(crawlData)
+    query = {
+      "query" : {
+        "filtered" : {
+          "filter" : {
+            "missing" : { "field" : "query"}
+          }
+        }
+      }
+    }
+    crawlData = self._es.count(es_info['activeDomainIndex'], es_info['docType'],body=query)
+    count = crawlData['count']
+    if count > 0:
+      queries["Crawled Data"] = count
 
     return queries
 
@@ -223,8 +233,17 @@ class DomainModel(object):
 
     es_info = self._esInfo(session['domainId'])
 
-    tags_neutral = field_missing("tag", ["url"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
-    unique_tags = {"Neutral": len(tags_neutral)}
+    query = {
+      "query" : {
+        "filtered" : {
+          "filter" : {
+            "missing" : { "field" : "tag"}
+          }
+        }
+      }
+    }
+    tags_neutral = self._es.count(es_info['activeDomainIndex'], es_info['docType'],body=query)
+    unique_tags = {"Neutral": tags_neutral['count']}
 
     tags = get_unique_values('tag', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
     for tag, num in tags.iteritems():
