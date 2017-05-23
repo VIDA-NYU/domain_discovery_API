@@ -84,19 +84,22 @@ public class BingSearch {
 
                 String json_string = EntityUtils.toString(entity);
                 JSONObject jsResponse = new JSONObject(json_string);
-                JSONObject webPagesTemp = jsResponse.getJSONObject("webPages");
-                JSONArray webpages = webPagesTemp.getJSONArray("value");
-
-		for (int i=0; i<webpages.length(); i++){
-                    JSONObject item = webpages.getJSONObject(i);
-                    String url = (String)item.get("url");
-		    results.add(url);
-                    //System.out.println(url);
-
-		    JSONObject url_info = new JSONObject();
-		    url_info.put("link",url);
-		    url_info.put("rank",Integer.toString(nStart+i));
-		    download.addTask(url_info);
+		if(jsResponse.has("webPages")){
+		    JSONObject webPagesTemp = jsResponse.getJSONObject("webPages");
+		    
+		    JSONArray webpages = webPagesTemp.getJSONArray("value");
+		    
+		    for (int i=0; i<webpages.length(); i++){
+			JSONObject item = webpages.getJSONObject(i);
+			String url = (String)item.get("url");
+			results.add(url);
+			//System.out.println(url);
+			
+			JSONObject url_info = new JSONObject();
+			url_info.put("link",url);
+			url_info.put("rank",Integer.toString(nStart+i));
+			download.addTask(url_info);
+		    }
 		}
 	    }
 	} 
