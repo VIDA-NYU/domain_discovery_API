@@ -1295,8 +1295,10 @@ class DomainModel(object):
     if not session.get('toDate') is None:
       session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
 
-    hits = self._getPagesQuery(session)
+    results = self._getPagesQuery(session)
 
+    hits = results['results']
+    
     no_image_desc_ids = Set()
     docs = {}
     for hit in hits:
@@ -1337,7 +1339,7 @@ class DomainModel(object):
           if desc is not None:
             docs[image_desc_hit['url'][0]]['snippet'] =  " ".join(desc.split(" ")[0:20])
 
-    return docs
+    return {'total': results['total'], 'results': docs}
 
   def _getMostRecentPages(self, session):
     es_info = self._esInfo(session['domainId'])

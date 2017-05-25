@@ -2,6 +2,7 @@
 from os import environ
 import sys
 from config import es as default_es
+from pprint import pprint
 
 def get_documents(terms, term_field, fields=["text"], es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -136,7 +137,7 @@ def get_most_recent_documents(start=0, opt_maxNumberOfPages = 200, mapping=None,
         fields['id'] = hit['_id']
         results.append(fields)
 
-    return {"total": res['total'], 'results':results}
+    return {"total": res['hits']['total'], 'results':results}
 
 def get_all_ids(pageCount = 100000, fields=[], es_index = 'memex', es_doc_type = 'page', es = None):
     if es is None:

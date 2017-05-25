@@ -28,7 +28,7 @@ def search(field, queryStr, start=0, pageCount=100, fields = [], es_index='memex
             fields['id'] = hit['_id']
             results.append(fields)
 
-        return {"total": res['total'], 'results':results}
+        return {"total": res['hits']['total'], 'results':results}
 
 def multifield_query_search(s_fields, start=0, pageCount=100, fields = [], es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -64,7 +64,7 @@ def multifield_query_search(s_fields, start=0, pageCount=100, fields = [], es_in
                 fields['id'] = hit['_id']
                 results.append(fields)
 
-        return {"total": res['total'], 'results':results}
+        return {"total": res['hits']['total'], 'results':results}
 
 def term_search(field, queryStr, start=0, pageCount=100, fields=[], es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -95,7 +95,7 @@ def term_search(field, queryStr, start=0, pageCount=100, fields=[], es_index='me
                 fields['id'] = hit['_id']
                 results.append(fields)
 
-        return {"total": res['total'], 'results':results}
+        return {"total": res['hits']['total'], 'results':results}
 
 
 def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index='memex', es_doc_type='page', es=None):
@@ -146,7 +146,7 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
         fields['id'] = hit['_id']
         results.append(fields)
 
-    return {"total": res['total'], 'results':results}
+    return {"total": res['hits']['total'], 'results':results}
 
 def get_image(url, es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -237,7 +237,7 @@ def range_search(field, from_val, to_val, ret_fields=[], epoch=True,  start=0, p
         fields['id'] = hit['_id']
         results.append(fields)
 
-    return {"total": res['total'], 'results':results}
+    return {"total": res['hits']['total'], 'results':results}
 
 def field_missing(field, fields, pagesCount, es_index='memex', es_doc_type='page', es=None):
     if es is None:
