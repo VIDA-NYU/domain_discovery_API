@@ -146,10 +146,8 @@ class DomainModel(object):
     domainId = session['domainId']
     status = {}
     if self.runningCrawlers.get(domainId) is not None:
-      print "\n\n\n RUNNING CRAWLERS ", self.runningCrawlers,"\n\n\n"
       status["crawler"] = self.runningCrawlers[domainId]['message']
 
-    print "\n\n\n Status ",status,"\n\n\n" 
     return status
     
   def getAvailableProjectionAlgorithms(self):
@@ -1325,13 +1323,14 @@ class DomainModel(object):
       else:
         print "\n\n\n Could not find URL for ",hit["id"],"\n\n\n"
 
-    print "\n\n\n NO IMAGE IDS ", no_image_desc_ids,"\n\n\n"
-    
     if len(no_image_desc_ids) > 0:
+
       image_desc_hits = get_documents_by_id(list(no_image_desc_ids), ["url", "html", "text"], es_info['activeDomainIndex'], es_info['docType'], self._es)
+
       for image_desc_hit in image_desc_hits:
         if image_desc_hit.get('html') is not None:
           imageURL = getImage(image_desc_hit["html"][0], image_desc_hit['url'][0])
+          
           if imageURL is not None:
             docs[image_desc_hit['url'][0]]['image_url'] = imageURL
             
@@ -1434,31 +1433,38 @@ class DomainModel(object):
     if not session['fromDate'] is None:
       s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
-    hits=[]
+    s_fields = s_fields_aux.copy()
+    
     queries = session['selected_queries'].split(',')
 
+    filters = []
     for query in queries:
-      s_fields = s_fields_aux.copy()
       if "Crawled Data" in query:
-        s_fields["filter"] = {
-          "missing" : { "field" : "query" }
-        }
+        filters.append({"missing" : { "field" : "query" }})
       else:
-        s_fields[es_info['mapping']["query"]] = query
+        filters.append({"term":{"query":query}})
 
-      results= multifield_term_search(s_fields,
-                                      session['from'], 
-                                      session['pagesCap'],
-                                      ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
-                                      es_info['activeDomainIndex'],
-                                      es_info['docType'],
-                                      self._es)
-      if session['selected_morelike']=="moreLike":
-        aux_result = self._getMoreLikePagesAll(session, results)
-        hits.extend(aux_result)
-      else:
-        hits.extend(results)
-    return hits
+    if len(filters) > 0:
+      s_fields["filter"] = {"or":filters}
+
+    print "\n\n\n QUERY s_fields", s_fields,"\n\n\n"
+
+    results= multifield_term_search(s_fields,
+                                    session['from'], 
+                                    session['pagesCap'],
+                                    ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
+                                    es_info['activeDomainIndex'],
+                                    es_info['docType'],
+                                    self._es)
+
+    #TODO: Revisit when allowing selected_morelike
+    # if session['selected_morelike']=="moreLike":
+    #   aux_result = self._getMoreLikePagesAll(session, results)
+    #   hits.extend(aux_result)
+    # else:
+    #   hits.extend(results)
+      
+    return results
 
   def _getPagesForTLDs(self, session):
     es_info = self._esInfo(session['domainId'])
