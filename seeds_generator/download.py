@@ -92,25 +92,32 @@ def callDownloadUrls(query, subquery, urls_str, es_info):
 
 def getDescription(responseBody, content_text):
   # try to extract og:description or the first <meta name="description"> tag available in the html
-  responseBody = responseBody.strip()
-
+  responseBody = responseBody.strip().split(">")
+  
   desc = ""
-  p = re.compile('.*?<meta property="og:description" content="(.*?)"(.*?)/>', re.I|re.S)
-  m = p.match(responseBody)
 
-  if(m):
-    desc = m.group(1)
-  else:
-    p = re.compile('.*?<meta content="(.*?)" property="og:description">', re.I|re.S)
-    m = p.match(responseBody)
+  for line in responseBody:
+    p = re.compile('.*?<meta property="og:description" content="(.*?)"(.*?)/>', re.I|re.S)
+    m = p.match(line)
+
     if(m):
       desc = m.group(1)
-      desc = desc[desc.rfind("\"")+1:]
+      break
     else:
-      p = re.compile('.*?<meta name="description"(.*?)content="(.*?)"(.*?)>', re.I|re.S)
-      m = p.match(responseBody)
+      p = re.compile('.*?<meta content="(.*?)" property="og:description">', re.I|re.S)
+      m = p.match(line)
       if(m):
-        desc = m.group(2)
+        desc = m.group(1)
+        desc = desc[desc.rfind("\"")+1:]
+        break
+      else:
+        p = re.compile('.*?<meta name="description"(.*?)content="(.*?)"(.*?)>', re.I|re.S)
+        m = p.match(line)
+    
+        if(m):
+          desc = m.group(2)
+          break
+          
   clean = ""
   if(desc != ""):
     clean = desc 
@@ -124,29 +131,38 @@ def getDescription(responseBody, content_text):
 
 def getImage(responseBody, url):
   # try to extract og:image or the first <img> tag available in the html
-  responseBody = responseBody.strip()
-
-  img_url = ""
-  p = re.compile('.*?<meta .*?="og:image" content="(.*?)"(.*?)', re.I|re.S)
-  m = p.match(responseBody)
+  responseBody = responseBody.strip().split(">")
   
-  if(m):
-    img_url = m.group(1)
-  else:
-    p = re.compile('.*?<meta content="(.*?)" .*?="og:image"', re.I|re.S)
-    m = p.match(responseBody)
-      
+  img_url = ""
+  for line in responseBody:
+    p = re.compile('.*?<meta .*?="og:image" content="(.*?)"(.*?)', re.I|re.S)
+    m = p.match(line)
+
     if(m):
       img_url = m.group(1)
-
-  if img_url=="":
-    p = re.compile('.*?<img(.*?)src="(.*?)"', re.I|re.S)
-    m = p.match(responseBody[responseBody.find("<body"):len(responseBody)-1])
-    if(m):
-      img_url = m.group(2)
+      break
     else:
-      return ""
-  
+      p = re.compile('.*?<meta content="(.*?)" .*?="og:image"', re.I|re.S)
+      m = p.match(line)
+
+      if(m):
+        img_url = m.group(1)
+        print img_url
+        break
+
+    if img_url=="":
+      p = re.compile('.*?<img(.*?)src="(.*?)"', re.I|re.S)
+      m = p.match(line)
+
+      if(m):
+        img_url = m.group(2)
+        print img_url
+        break
+
+  #no image url found    
+  if img_url == "":
+    return ""
+
   # could find a image
   # try to fix or resolve relative URLs
   if("http://" in img_url or
