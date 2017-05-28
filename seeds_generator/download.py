@@ -147,7 +147,6 @@ def getImage(responseBody, url):
 
       if(m):
         img_url = m.group(1)
-        print img_url
         break
 
     if img_url=="":
@@ -156,7 +155,6 @@ def getImage(responseBody, url):
 
       if(m):
         img_url = m.group(2)
-        print img_url
         break
 
   #no image url found    
