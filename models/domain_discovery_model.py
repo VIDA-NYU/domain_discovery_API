@@ -149,7 +149,7 @@ class DomainModel(object):
       status["crawler"] = self.runningCrawlers[domainId]['message']
 
     return status
-    
+
   def getAvailableProjectionAlgorithms(self):
     return [{'name': key} for key in self.projectionsAlg.keys()]
 
@@ -457,7 +457,7 @@ class DomainModel(object):
 
     # Delete indices from config index
     delete_document(domains.keys(), "config", "domains", self._es)
-    
+
 
   def updateColors(self, session, colors):
     es_info = self._esInfo(session['domainId'])
@@ -508,7 +508,7 @@ class DomainModel(object):
       top = int(session['pagesCap'])
     else:
       top = max_url_count
-      
+
     if 'GOOG' in session['search_engine']:
       comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -t ' + str(top) + \
              ' -q "' + terms.replace('"','\\"')  + '"' + \
@@ -1286,7 +1286,7 @@ class DomainModel(object):
     results = self._getPagesQuery(session)
 
     hits = results['results']
-    
+
     no_image_desc_ids = Set()
     docs = {}
     for hit in hits:
@@ -1320,10 +1320,10 @@ class DomainModel(object):
       for image_desc_hit in image_desc_hits:
         if image_desc_hit.get('html') is not None:
           imageURL = getImage(image_desc_hit["html"][0], image_desc_hit['url'][0])
-          
+
           if imageURL is not None:
             docs[image_desc_hit['url'][0]]['image_url'] = imageURL
-            
+
           desc = getDescription(image_desc_hit["html"][0], image_desc_hit['text'][0])
           if desc is not None:
             docs[image_desc_hit['url'][0]]['snippet'] =  " ".join(desc.split(" ")[0:20])
@@ -1433,7 +1433,6 @@ class DomainModel(object):
 
     return results
 
-
   def _getPagesForQueries(self, session):
     es_info = self._esInfo(session['domainId'])
 
@@ -1457,7 +1456,7 @@ class DomainModel(object):
       s_fields["filter"] = {"or":filters}
 
     results= multifield_term_search(s_fields,
-                                    session['from'], 
+                                    session['from'],
                                     session['pagesCap'],
                                     ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
                                     es_info['activeDomainIndex'],
@@ -1470,7 +1469,7 @@ class DomainModel(object):
     #   hits.extend(aux_result)
     # else:
     #   hits.extend(results)
-      
+
     return results
 
   def _getPagesForTLDs(self, session):
@@ -1491,9 +1490,9 @@ class DomainModel(object):
 
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
-      
+
     results= multifield_term_search(s_fields,
-                                       session['from'], 
+                                       session['from'],
                                        session['pagesCap'],
                                        ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
                                        es_info['activeDomainIndex'],
@@ -1504,7 +1503,7 @@ class DomainModel(object):
       #   hits.extend(aux_result)
       # else:
       #   hits.extend(results)
-      
+
     return results
 
   def _getPagesForTags(self, session):
@@ -1520,7 +1519,6 @@ class DomainModel(object):
     filters=[]
     tags = session['selected_tags'].split(',')
 
-    
     for tag in tags:
       if tag != "":
         if tag == "Neutral":
@@ -1528,17 +1526,17 @@ class DomainModel(object):
           filters.append({"term":{es_info["mapping"]["tag"]:""}})
         else:
           filters.append({"term":{es_info["mapping"]["tag"]:tag}})
-          
+
     #filters.append({"wildcard": {es_info['mapping']["tag"]:"*" + tag + "*"}})
 
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
-                     
+
     results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                      es_info['activeDomainIndex'],
                                     es_info['docType'],
                                      self._es)
-    
+
     return results
 
   def _getPagesForModelTags(self, session):
@@ -1555,17 +1553,17 @@ class DomainModel(object):
         filters.append({"term":{"label_pos":1}})
       elif tag == "Maybe irrelevant":
         filters.append({"term":{"label_neg":1}})
-        
+
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
-                     
+
     results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                      es_info['activeDomainIndex'],
                                     es_info['docType'],
                                      self._es)
-    
+
     return results
-  
+
   def _getRelevantPages(self, session):
     es_info = self._esInfo(session['domainId'])
 
@@ -1817,7 +1815,7 @@ class DomainModel(object):
   def updateOnlineClassifier(self, session):
     domainId = session['domainId']
     es_info = self._esInfo(domainId)
-    
+
     onlineClassifier = None
     trainedPosSamples = []
     trainedNegSamples = []
@@ -2105,30 +2103,30 @@ class DomainModel(object):
     """
 
     domainId = session['domainId']
-    
+
     if self.runningCrawlers.get(domainId) is not None:
       return self.runningCrawlers[domainId]['message']
-    
+
     if len(self.runningCrawlers.keys()) == 0:
       es_info = self._esInfo(domainId)
-      
+
       data_dir = self._path + "/data/"
       data_domain  = data_dir + es_info['activeDomainIndex']
       domainmodel_dir = data_domain + "/models/"
       domainoutput_dir = data_domain + "/output/"
-      
+
       if (not isdir(domainmodel_dir)):
         self.createModel(session, False)
       if (not isdir(domainmodel_dir)):
         return "No domain model available"
-      
+
       ache_home = environ['ACHE_HOME']
       comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt"
       p = Popen(shlex.split(comm))
       self.runningCrawlers[domainId] = {'process': p}
-      
+
       self.runningCrawlers[domainId]['message'] = "Crawler is running"
-      
+
       return "Crawler is running"
     return "Crawler running for domain: " + self._domains[self.runningCrawlers.keys()[0]]['domain_name']
 
@@ -2144,7 +2142,7 @@ class DomainModel(object):
     """
 
     domainId = session['domainId']
-    
+
     p = self.runningCrawlers[domainId]['process']
 
     p.terminate()
@@ -2152,11 +2150,11 @@ class DomainModel(object):
     print "\n\n\nSHUTTING DOWN\n\n\n"
 
     self.runningCrawlers[domainId]['message'] = "Crawler shutting down"
-    
+
     p.wait()
 
     self.runningCrawlers.pop(domainId)
-    
+
     print "\n\n\nCrawler Stopped\n\n\n"
     return "Crawler Stopped"
 
