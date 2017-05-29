@@ -1377,8 +1377,6 @@ class DomainModel(object):
     for criteria in criteria_comb:
       s_fields = s_fields_aux.copy()
       i = 0
-      print "CRITERIA"
-      print criteria
       for criterion_index in criteria:
         criterion = n_criteria_vals[i][criterion_index]
         n_criterion = n_criteria[i]
