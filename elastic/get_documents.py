@@ -179,7 +179,7 @@ def get_documents_by_id(ids=[], fields=[], es_index = 'memex', es_doc_type = 'pa
         "fields": fields
     }
 
-    res = es.search(body=query, index = es_index, doc_type = es_doc_type, size=len(ids))
+    res = es.search(body=query, index = es_index, doc_type = es_doc_type, size=len(ids), request_timeout=30)
 
     hits = res['hits']['hits']
 

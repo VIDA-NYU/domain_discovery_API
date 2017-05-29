@@ -47,7 +47,7 @@ def get_unique_values(field, size, es_index='memex', es_doc_type='page', es=None
             }
         }
     }
-    res = es.search(body=query, index=es_index, doc_type=es_doc_type, timeout=30)
+    res = es.search(body=query, index=es_index, doc_type=es_doc_type, request_timeout=30)
 
     return {item['key']:item['doc_count'] for item in res['aggregations']['unique_values']['buckets']}
     

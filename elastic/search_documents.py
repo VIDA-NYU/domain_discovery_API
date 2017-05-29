@@ -294,14 +294,14 @@ def field_exists(field, fields, pagesCount, es_index='memex', es_doc_type='page'
 
     return results
 
-def exec_query(query, fields, pagesCount, es_index='memex', es_doc_type='page', es=None):
+def exec_query(query, fields, start=0, pagesCount=100, es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
 
     query = query
     query["fields"] = fields
 
-    res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pagesCount)
+    res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pagesCount, request_timeout=30)
     hits = res['hits']['hits']
 
     results = []
@@ -310,7 +310,7 @@ def exec_query(query, fields, pagesCount, es_index='memex', es_doc_type='page', 
         fields['id'] = hit['_id']
         results.append(fields)
 
-    return results
+    return {"total":res["hits"]["total"], "results":results}
 
 if __name__ == "__main__":
     print sys.argv[1:]
