@@ -2,6 +2,7 @@
 from os import environ
 import sys
 from config import es as default_es
+from pprint import pprint
 
 def get_documents(terms, term_field, fields=["text"], es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -74,7 +75,7 @@ def get_more_like_this(urls, fields=[], pageCount=200, es_index='memex', es_doc_
 
     return results
 
-def get_most_recent_documents(opt_maxNumberOfPages = 200, mapping=None, fields = [], opt_filter = None, es_index = 'memex', es_doc_type = 'page', es = None):
+def get_most_recent_documents(start=0, opt_maxNumberOfPages = 200, mapping=None, fields = [], opt_filter = None, es_index = 'memex', es_doc_type = 'page', es = None):
 
     if mapping == None:
         print "No mappings found"
@@ -127,7 +128,7 @@ def get_most_recent_documents(opt_maxNumberOfPages = 200, mapping=None, fields =
     if len(fields) > 0:
         query["fields"] = fields
 
-    res = es.search(body=query, index = es_index, doc_type = es_doc_type, request_timeout=600)
+    res = es.search(body=query, index = es_index, doc_type = es_doc_type, from_=start, request_timeout=600)
     hits = res['hits']['hits']
 
     results = []
@@ -136,7 +137,7 @@ def get_most_recent_documents(opt_maxNumberOfPages = 200, mapping=None, fields =
         fields['id'] = hit['_id']
         results.append(fields)
 
-    return results
+    return {"total": res['hits']['total'], 'results':results}
 
 def get_all_ids(pageCount = 100000, fields=[], es_index = 'memex', es_doc_type = 'page', es = None):
     if es is None:
@@ -178,7 +179,7 @@ def get_documents_by_id(ids=[], fields=[], es_index = 'memex', es_doc_type = 'pa
         "fields": fields
     }
 
-    res = es.search(body=query, index = es_index, doc_type = es_doc_type, size=len(ids))
+    res = es.search(body=query, index = es_index, doc_type = es_doc_type, size=len(ids), request_timeout=30)
 
     hits = res['hits']['hits']
 

@@ -4,7 +4,7 @@ import base64
 from datetime import datetime
 from config import es as default_es
 
-def search(field, queryStr, pageCount=100, fields = [], es_index='memex', es_doc_type='page', es=None):
+def search(field, queryStr, start=0, pageCount=100, fields = [], es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
 
@@ -19,7 +19,7 @@ def search(field, queryStr, pageCount=100, fields = [], es_index='memex', es_doc
             "fields": fields
         }
 
-        res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pageCount)
+        res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pageCount)
         hits = res['hits']['hits']
 
         results = []
@@ -28,9 +28,9 @@ def search(field, queryStr, pageCount=100, fields = [], es_index='memex', es_doc
             fields['id'] = hit['_id']
             results.append(fields)
 
-        return results
+        return {"total": res['hits']['total'], 'results':results}
 
-def multifield_query_search(s_fields, pageCount=100, fields = [], es_index='memex', es_doc_type='page', es=None):
+def multifield_query_search(s_fields, start=0, pageCount=100, fields = [], es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
 
@@ -51,7 +51,7 @@ def multifield_query_search(s_fields, pageCount=100, fields = [], es_index='meme
             "fields": fields
         }
 
-        res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pageCount, request_timeout=600)
+        res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pageCount, request_timeout=600)
 
         hits = res['hits']['hits']
 
@@ -64,9 +64,9 @@ def multifield_query_search(s_fields, pageCount=100, fields = [], es_index='meme
                 fields['id'] = hit['_id']
                 results.append(fields)
 
-        return results
+        return {"total": res['hits']['total'], 'results':results}
 
-def term_search(field, queryStr, pageCount=100, fields=[], es_index='memex', es_doc_type='page', es=None):
+def term_search(field, queryStr, start=0, pageCount=100, fields=[], es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
 
@@ -83,7 +83,7 @@ def term_search(field, queryStr, pageCount=100, fields=[], es_index='memex', es_
             "fields": fields
         }
 
-        res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pageCount)
+        res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pageCount)
         hits = res['hits']['hits']
 
         results = []
@@ -95,10 +95,10 @@ def term_search(field, queryStr, pageCount=100, fields=[], es_index='memex', es_
                 fields['id'] = hit['_id']
                 results.append(fields)
 
-        return results
+        return {"total": res['hits']['total'], 'results':results}
 
 
-def multifield_term_search(s_fields, pageCount=100, fields=[], es_index='memex', es_doc_type='page', es=None):
+def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
 
@@ -137,7 +137,7 @@ def multifield_term_search(s_fields, pageCount=100, fields=[], es_index='memex',
 
     print "\n\n\n MULTIFIELD TERM SEARCH \n", query,"\n\n\n"
     
-    res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pageCount)
+    res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pageCount)
     hits = res['hits']['hits']
 
     results = []
@@ -146,7 +146,7 @@ def multifield_term_search(s_fields, pageCount=100, fields=[], es_index='memex',
         fields['id'] = hit['_id']
         results.append(fields)
 
-    return results
+    return {"total": res['hits']['total'], 'results':results}
 
 def get_image(url, es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -208,7 +208,7 @@ def get_context(terms, field = "text", size=500, es_index='memex', es_doc_type='
 
         return context
 
-def range_search(field, from_val, to_val, ret_fields=[], epoch=True, pagesCount = 200, es_index='memex', es_doc_type='page', es=None):
+def range_search(field, from_val, to_val, ret_fields=[], epoch=True,  start=0, pagesCount = 200, es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es_elastic
 
@@ -228,7 +228,7 @@ def range_search(field, from_val, to_val, ret_fields=[], epoch=True, pagesCount 
         "fields": ret_fields
     }
 
-    res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pagesCount, request_timeout=600)
+    res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pagesCount, request_timeout=600)
     hits = res['hits']['hits']
 
     results = []
@@ -237,7 +237,7 @@ def range_search(field, from_val, to_val, ret_fields=[], epoch=True, pagesCount 
         fields['id'] = hit['_id']
         results.append(fields)
 
-    return results
+    return {"total": res['hits']['total'], 'results':results}
 
 def field_missing(field, fields, pagesCount, es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -294,14 +294,14 @@ def field_exists(field, fields, pagesCount, es_index='memex', es_doc_type='page'
 
     return results
 
-def exec_query(query, fields, pagesCount, es_index='memex', es_doc_type='page', es=None):
+def exec_query(query, fields, start=0, pagesCount=100, es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
 
     query = query
     query["fields"] = fields
 
-    res = es.search(body=query, index=es_index, doc_type=es_doc_type, size=pagesCount)
+    res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pagesCount, request_timeout=30)
     hits = res['hits']['hits']
 
     results = []
@@ -310,7 +310,7 @@ def exec_query(query, fields, pagesCount, es_index='memex', es_doc_type='page', 
         fields['id'] = hit['_id']
         results.append(fields)
 
-    return results
+    return {"total":res["hits"]["total"], "results":results}
 
 if __name__ == "__main__":
     print sys.argv[1:]
