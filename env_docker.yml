@@ -6,6 +6,6 @@ channels:
   - vida-nyu
   
 dependencies:
-    - elasticsearch
     - ddt-word2vec
-    - maven    
+    - maven
+    - openjdk
