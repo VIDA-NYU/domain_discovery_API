@@ -1707,10 +1707,14 @@ class DomainModel(object):
         "wildcard": {es_info['mapping']["tag"]:tag}
       }
       s_fields["queries"] = [query]
-      pos_docs = pos_docs + multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
-                                                   es_info['activeDomainIndex'],
-                                                   es_info['docType'],
-                                                   self._es)
+
+      results = multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
+                                       es_info['activeDomainIndex'],
+                                       es_info['docType'],
+                                       self._es)
+      
+      pos_docs = pos_docs + results['results']
+      
     neg_docs = []
     for tag in neg_tags.split(','):
       s_fields = {}
@@ -1718,10 +1722,11 @@ class DomainModel(object):
         "wildcard": {es_info['mapping']["tag"]:tag}
       }
       s_fields["queries"] = [query]
-      neg_docs = neg_docs + multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
-                                                   es_info['activeDomainIndex'],
-                                                   es_info['docType'],
-                                                   self._es)
+      results = multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
+                                       es_info['activeDomainIndex'],
+                                       es_info['docType'],
+                                       self._es)
+      neg_docs = neg_docs + results['results']
 
     pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
     neg_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in neg_docs}
