@@ -1708,7 +1708,9 @@ class DomainModel(object):
       }
       s_fields["queries"] = [query]
 
-      results = multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
+      results = multifield_term_search(s_fields,
+                                       0, self._all,
+                                       ["url", es_info['mapping']['html']],
                                        es_info['activeDomainIndex'],
                                        es_info['docType'],
                                        self._es)
@@ -1722,7 +1724,9 @@ class DomainModel(object):
         "wildcard": {es_info['mapping']["tag"]:tag}
       }
       s_fields["queries"] = [query]
-      results = multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
+      results = multifield_term_search(s_fields,
+                                       0, self._all,
+                                       ["url", es_info['mapping']['html']],
                                        es_info['activeDomainIndex'],
                                        es_info['docType'],
                                        self._es)
