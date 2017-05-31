@@ -203,19 +203,6 @@ class DomainModel(object):
     """
     es_info = self._esInfo(session['domainId'])
     queries = get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
-    query = {
-      "query" : {
-        "filtered" : {
-          "filter" : {
-            "missing" : { "field" : "query"}
-          }
-        }
-      }
-    }
-    crawlData = self._es.count(es_info['activeDomainIndex'], es_info['docType'],body=query, request_timeout=30)
-    count = crawlData['count']
-    if count > 0:
-      queries["Crawled Data"] = count
 
     return queries
 
@@ -259,6 +246,36 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
 
     return self.predictUnlabeled(session)
+
+  def getAvailableCrawledData(self, session):
+    es_info = self._esInfo(session['domainId'])
+
+    unique_tags = {}
+    
+    query = {
+      "query" : {
+        "term" : {
+          "isRelevant": "relevant"
+        }
+      }
+    }
+    crawlData = self._es.count(es_info['activeDomainIndex'], es_info['docType'],body=query, request_timeout=30)
+    count = crawlData['count']
+    unique_tags["CD Relevant"] = count
+
+    query = {
+      "query" : {
+        "term" : {
+          "isRelevant": "irrelevant"
+        }
+      }
+    }
+    crawlData = self._es.count(es_info['activeDomainIndex'], es_info['docType'],body=query, request_timeout=30)
+    count = crawlData['count']
+    unique_tags["CD Irrelevant"] = count
+
+    return unique_tags
+
 
   def getPagesSummaryDomain(self, opt_ts1 = None, opt_ts2 = None, opt_applyFilter = False, session = None):
 
@@ -1539,6 +1556,37 @@ class DomainModel(object):
 
     return results
 
+  def _getPagesForCrawledTags(self, session):
+    es_info = self._esInfo(session['domainId'])
+
+    print "\n\n\n GET CRAWLED PAGES \n\n\n"
+    s_fields = {}
+    if not session['filter'] is None:
+      s_fields[es_info['mapping']["text"]] = session['filter'].replace('"','\"')
+
+    if not session['fromDate'] is None:
+      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+
+    filters=[]
+    tags = session['selected_crawled_tags'].split(',')
+
+    print "TAGS ", tags
+    for tag in tags:
+      if tag == "CD Relevant":
+        filters.append({"term":{"isRelevant":"relevant"}})
+      elif tag == "CD Irrelevant":
+        filters.append({"term":{"isRelevant":"irrelevant"}})
+
+    if len(filters) > 0:
+      s_fields["filter"] = {"or":filters}
+
+    results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                     es_info['activeDomainIndex'],
+                                    es_info['docType'],
+                                     self._es)
+
+    return results
+
   def _getPagesForModelTags(self, session):
     es_info = self._esInfo(session['domainId'])
 
@@ -1644,6 +1692,8 @@ class DomainModel(object):
       hits = self._getPagesForTags(session)
     elif (session.get('pageRetrievalCriteria') == 'Model Tags'):
       hits = self._getPagesForModelTags(session)
+    elif (session.get('pageRetrievalCriteria') == 'Crawled Tags'):
+      hits = self._getPagesForCrawledTags(session)
 
     return hits
 

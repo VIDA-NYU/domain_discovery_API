@@ -111,6 +111,13 @@ class Page(object):
     return json.dumps(result)
 
   @cherrypy.expose
+  def getAvailableCrawledData(self, session):
+    session = json.loads(session)
+    result = self._model.getAvailableCrawledData(session)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(result)
+  
+  @cherrypy.expose
   def getAnnotatedTerms(self, session):
     session = json.loads(session)
     result = self._model.getAnnotatedTerms(session)
