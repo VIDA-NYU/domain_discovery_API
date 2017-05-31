@@ -1413,6 +1413,11 @@ class DomainModel(object):
             filters.append({"term":{"label_neg": 1}})
           elif criterion in 'Unsure':
             filters.append({"term":{"unsure_tag": 1}})
+        elif n_criterion == 'crawled_tag':
+          if criterion == "CD Relevant":
+            filters.append({"term":{"isRelevant":"relevant"}})
+          elif criterion == "CD Irrelevant":
+            filters.append({"term":{"isRelevant":"irrelevant"}})
         else:
           filters.append({"term":{n_criterion: criterion}})
         i = i+1
@@ -1464,10 +1469,7 @@ class DomainModel(object):
 
     filters = []
     for query in queries:
-      if "Crawled Data" in query:
-        filters.append({"missing" : { "field" : es_info["mapping"]["query"]}})
-      else:
-        filters.append({"term":{es_info["mapping"]["query"]:query}})
+      filters.append({"term":{es_info["mapping"]["query"]:query}})
 
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
@@ -1559,7 +1561,6 @@ class DomainModel(object):
   def _getPagesForCrawledTags(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    print "\n\n\n GET CRAWLED PAGES \n\n\n"
     s_fields = {}
     if not session['filter'] is None:
       s_fields[es_info['mapping']["text"]] = session['filter'].replace('"','\"')
@@ -1570,7 +1571,6 @@ class DomainModel(object):
     filters=[]
     tags = session['selected_crawled_tags'].split(',')
 
-    print "TAGS ", tags
     for tag in tags:
       if tag == "CD Relevant":
         filters.append({"term":{"isRelevant":"relevant"}})
