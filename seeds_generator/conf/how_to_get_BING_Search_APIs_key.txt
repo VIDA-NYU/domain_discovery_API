@@ -1,0 +1,5 @@
+Go to https://azure.microsoft.com/try/cognitive-services/?api=bing-web-search-api
+Get Search APIs v7
+
+Search Endpoint:
+https://api.cognitive.microsoft.com/bing/v7.0/search
