@@ -61,8 +61,6 @@ public class BingSearch {
 	Download download = new Download(query, null, es_index, es_doc_type, es_server);
 	ArrayList<String> results = new ArrayList<String>();
 	    
-	query = query.replaceAll(" ", "%20");
-
 	try {
 	    int step = 10; //Bing can return maximum 50 results per query
 	    URIBuilder builder = new URIBuilder("https://api.cognitive.microsoft.com/bing/v7.0/search");
@@ -78,7 +76,7 @@ public class BingSearch {
 
                 HttpGet request = new HttpGet(uri);
                 request.setHeader("Ocp-Apim-Subscription-Key", this.accountKey);
-
+		
                 HttpResponse response = httpclient.execute(request);
                 HttpEntity entity = response.getEntity();
 
@@ -149,7 +147,7 @@ public class BingSearch {
 	    }
 	    ++i;
 	}
-	
+
 	BingSearch bs = new BingSearch();
 	bs.search(query, start, top, es_index, es_doc_type, es_server);
     }
