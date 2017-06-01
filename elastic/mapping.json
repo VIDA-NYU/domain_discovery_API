@@ -9,20 +9,26 @@
     },
     "properties": {
       "url": {
-        "type": "string",
-        "index": "not_analyzed"
+          "type": "string",
+	  "index": "not_analyzed"
       },
       "domain": {
-        "type": "string",
-        "index": "not_analyzed"
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
       },
       "text": {
         "type": "string",
         "term_vector": "yes"
       },
+      "description": {
+        "type": "string",
+        "term_vector": "yes"
+      },
       "html": {
         "type": "string",
-	      "index": "no"
+	"index": "no"
       },
       "query": {
         "type": "string",
