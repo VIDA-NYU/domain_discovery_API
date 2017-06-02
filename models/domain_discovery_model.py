@@ -143,10 +143,9 @@ class DomainModel(object):
     self._path = path
 
   def getStatus(self, session):
-    domainId = session['domainId']
     status = {}
-    if self.runningCrawlers.get(domainId) is not None:
-      status["crawler"] = self.runningCrawlers[domainId]['message']
+    for crawler in self.runningCrawlers:
+      status["crawler"] = [{ "domain": crawler["domain"], "status": crawler["status"]}]
 
     return status
 
@@ -2174,7 +2173,7 @@ class DomainModel(object):
     domainId = session['domainId']
 
     if self.runningCrawlers.get(domainId) is not None:
-      return self.runningCrawlers[domainId]['message']
+      return self.runningCrawlers[domainId]['status']
 
     if len(self.runningCrawlers.keys()) == 0:
       es_info = self._esInfo(domainId)
@@ -2192,9 +2191,7 @@ class DomainModel(object):
       ache_home = environ['ACHE_HOME']
       comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt"
       p = Popen(shlex.split(comm))
-      self.runningCrawlers[domainId] = {'process': p}
-
-      self.runningCrawlers[domainId]['message'] = "Crawler is running"
+      self.runningCrawlers[domainId] = {'process': p, 'domain': self._domains[domainId]['domain_name'], 'status': "Crawler is running" }
 
       return "Crawler is running"
     return "Crawler running for domain: " + self._domains[self.runningCrawlers.keys()[0]]['domain_name']
@@ -2218,7 +2215,7 @@ class DomainModel(object):
 
     print "\n\n\nSHUTTING DOWN\n\n\n"
 
-    self.runningCrawlers[domainId]['message'] = "Crawler shutting down"
+    self.runningCrawlers[domainId]['status'] = "Crawler shutting down"
 
     p.wait()
 
