@@ -28,7 +28,7 @@ def search(field, queryStr, start=0, pageCount=100, fields = [], es_index='memex
             fields['id'] = hit['_id']
             results.append(fields)
 
-        return {"total": res['hits']['total'], 'results':results}
+            return {"total": res['hits']['total'], 'results':results}
 
 def multifield_query_search(s_fields, start=0, pageCount=100, fields = [], es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -113,6 +113,17 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
             queries.extend(v)
         elif "filter" in k:
             filter_q = v
+        elif "multi_match" in k:
+            for item in v:
+                match_query = {
+                    "multi_match": {
+                        "query": item[0],
+                        "fields": item[1],
+                        "type": "cross_fields",
+                        "operator": "and"
+                    }
+                }
+                queries.append(match_query)
         else:
             match_query = {
                 "match": {
@@ -123,6 +134,7 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
                 }
             }
             queries.append(match_query)
+        
 
     query["query"] =  {
             "bool": {
