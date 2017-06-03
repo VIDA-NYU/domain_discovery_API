@@ -144,8 +144,9 @@ class DomainModel(object):
 
   def getStatus(self, session):
     status = {}
-    for crawler in self.runningCrawlers:
-      status["crawler"] = [{ "domain": crawler["domain"], "status": crawler["status"]}]
+    print "\n\n\nCRAWLERS ",self.runningCrawlers,"\n\n\n"
+    for k,v in self.runningCrawlers.items():
+      status["crawler"] = [{ "domain": v["domain"], "status": v["status"]}]
 
     return status
 
