@@ -333,8 +333,10 @@ class Page(object):
 
   # Extracts terms with current labels state.
   @cherrypy.expose
-  def extractTerms(self, positiveTerms, negativeTerms, neutralTerms):
-    res = self._seedCrawler.extractTerms(positiveTerms, negativeTerms, neutralTerms)
+  def extractTerms(self, numberOfTerms, session):
+    session = json.loads(session)
+    numberOfTerms = int(numberOfTerms)
+    res = self._model.extractTerms(numberOfTerms, session)
 
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
