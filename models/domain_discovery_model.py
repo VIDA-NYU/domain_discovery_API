@@ -786,7 +786,7 @@ class DomainModel(object):
     for term in terms:
       s_fields["term"] = term
       res = multifield_term_search(s_fields, 0, 1, ['tag'], self._termsIndex, 'terms', self._es)
-      tags.extend(res)
+      tags.extend(res["results"])
 
     results = {result['id']: result['tag'][0] for result in tags}
 
