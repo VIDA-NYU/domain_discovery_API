@@ -409,7 +409,8 @@ class DomainModel(object):
       "doc_type": es_info['docType'],
     }
 
-    tags = multifield_term_search(s_fields, self._capTerms, ['tag'], self._termsIndex, 'terms', self._es)
+    results = multifield_term_search(s_fields, 0, self._capTerms, ['tag'], self._termsIndex, 'terms', self._es)
+    tags = results["results"]
 
     tag = []
     if tags:
@@ -875,12 +876,15 @@ class DomainModel(object):
       "doc_type": es_info['docType']
     }
 
-    pos_terms = [field['term'][0] for field in multifield_term_search(s_fields, 0, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)]
+    results = multifield_term_search(s_fields, 0, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)
+    pos_terms = [field['term'][0] for field in results["results"]]
 
     s_fields["tag"]="Negative"
-    neg_terms = [field['term'][0] for field in multifield_term_search(s_fields, 0, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)]
+    results = multifield_term_search(s_fields, 0, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)
+    neg_terms = [field['term'][0] for field in results["results"]]
 
     # Get selected pages displayed in the MDS window
+    session["from"] = 0
     results = self._getPagesQuery(session)
 
     top_terms = []
@@ -888,13 +892,13 @@ class DomainModel(object):
     top_trigrams = []
 
     text = []
-    urls = [hit["id"] for hit in results if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
+    urls = [hit["id"] for hit in results["results"] if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
     if(len(urls) > 0):
-      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
+      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results["results"] if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
     else:
-      urls = [hit["id"] for hit in results]
+      urls = [hit["id"] for hit in results["results"]]
       # If positive urls are not available then get the most recent documents
-      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results if hit[es_info['mapping']["text"]][0] != ""]
+      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results["results"] if hit[es_info['mapping']["text"]][0] != ""]
 
     if session["filter"] == "" or session["filter"] is None:
       if len(urls) > 0 and text:
@@ -966,7 +970,8 @@ class DomainModel(object):
       "doc_type": es_info['docType']
     }
 
-    custom_terms = [field['term'][0] for field in multifield_query_search(s_fields, 0, 500, ['term'], self._termsIndex, 'terms', self._es)]
+    results = multifield_query_search(s_fields, 0, 500, ['term'], self._termsIndex, 'terms', self._es)
+    custom_terms = [field['term'][0] for field in results["results"]]
 
     for term in custom_terms:
       try:
@@ -985,7 +990,8 @@ class DomainModel(object):
     if not top_terms:
       return []
 
-    pos_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in term_search(es_info['mapping']['tag'], ['Relevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)}
+    results = term_search(es_info['mapping']['tag'], ['Relevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    pos_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results["results"]}
     pos_urls = pos_data.keys();
     pos_text = pos_data.values();
 
@@ -1017,7 +1023,8 @@ class DomainModel(object):
       total_trigram_pos_tf = trigram_tf_data.sum(axis=0)
       total_trigram_pos = np.sum(total_trigram_pos_tf)
 
-    neg_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in term_search(es_info['mapping']['tag'], ['Irrelevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)}
+    results = term_search(es_info['mapping']['tag'], ['Irrelevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    neg_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results["results"]}
     neg_urls = neg_data.keys();
     neg_text = neg_data.values();
 
