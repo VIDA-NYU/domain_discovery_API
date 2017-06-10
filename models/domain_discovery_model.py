@@ -60,7 +60,8 @@ import urllib2
 MAX_TEXT_LENGTH = 3000
 MAX_TERM_FREQ = 2
 MAX_LABEL_PAGES = 2000
-
+MAX_SAMPLE_PAGES = 500
+ 
 class DomainModel(object):
 
   w2v = word2vec.word2vec(from_es=False)
@@ -862,6 +863,8 @@ class DomainModel(object):
 
     """
 
+    start_func = time.time()
+    
     es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
@@ -876,6 +879,8 @@ class DomainModel(object):
       "doc_type": es_info['docType']
     }
 
+    start = time.time()
+    
     results = multifield_term_search(s_fields, 0, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)
     pos_terms = [field['term'][0] for field in results["results"]]
 
@@ -883,65 +888,87 @@ class DomainModel(object):
     results = multifield_term_search(s_fields, 0, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)
     neg_terms = [field['term'][0] for field in results["results"]]
 
+    end = time.time()
+    print "Time to get pos and neg terms = ", end-start
+
+    start = time.time()
+    
     # Get selected pages displayed in the MDS window
     session["from"] = 0
     results = self._getPagesQuery(session)
+
+    end = time.time()
+    print "Time to get query pages = ", end-start
 
     top_terms = []
     top_bigrams = []
     top_trigrams = []
 
+    start = time.time()
+    
     text = []
-    urls = [hit["id"] for hit in results["results"] if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
-    if(len(urls) > 0):
-      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results["results"] if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
-    else:
-      urls = [hit["id"] for hit in results["results"]]
-      # If positive urls are not available then get the most recent documents
-      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results["results"] if hit[es_info['mapping']["text"]][0] != ""]
+    #urls = [hit["id"] for hit in results["results"] if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
+    url_ids = [hit["id"] for hit in results["results"]][0:MAX_SAMPLE_PAGES]
+    if(len(url_ids) > 0):
+      results = get_documents_by_id(url_ids, [es_info['mapping']["url"], es_info['mapping']["text"]], es_info["activeDomainIndex"], es_info["docType"], self._es)
+      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results]
 
-    if session["filter"] == "" or session["filter"] is None:
-      if len(urls) > 0 and text:
-        [bigram_tfidf_data, trigram_tfidf_data,_,_,bigram_corpus, trigram_corpus,top_bigrams, top_trigrams] = get_bigrams_trigrams.get_bigrams_trigrams(text, opt_maxNumberOfTerms+len(neg_terms), self._es)
+      end = time.time()
+      print "Time to get text for 500 query pages = ", end-start
 
-        tfidf_all = tfidf.tfidf(urls, pos_tags=self._pos_tags, mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
-        if pos_terms:
-          extract_terms_all = extract_terms.extract_terms(tfidf_all)
-          [ranked_terms, scores] = extract_terms_all.results(pos_terms)
-          top_terms = [ term for term in ranked_terms if (term not in neg_terms)]
-          top_terms = top_terms[0:opt_maxNumberOfTerms]
+    if len(url_ids) > 0 and text:
+      start = time.time()
+      [bigram_tfidf_data, trigram_tfidf_data,_,_,bigram_corpus, trigram_corpus,top_bigrams, top_trigrams] = get_bigrams_trigrams.get_bigrams_trigrams(text, opt_maxNumberOfTerms+len(neg_terms), self._es)
+      end = time.time()
+      print "Time to compute bigrams and trigrams = ", end-start
 
-          tfidf_bigram = tfidf.tfidf()
-          tfidf_bigram.tfidfArray = bigram_tfidf_data
-          tfidf_bigram.opt_docs = urls
-          tfidf_bigram.corpus = bigram_corpus
-          tfidf_bigram.mapping = es_info['mapping']
-          extract_terms_all = extract_terms.extract_terms(tfidf_bigram)
-          [ranked_terms, scores] = extract_terms_all.results(pos_terms)
-          top_bigrams = [ term for term in ranked_terms if (term not in neg_terms)]
+      start = time.time()
+      tfidf_all = tfidf.tfidf(url_ids, pos_tags=self._pos_tags, mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
+      if pos_terms:
+        extract_terms_all = extract_terms.extract_terms(tfidf_all)
+        [ranked_terms, scores] = extract_terms_all.results(pos_terms)
+        top_terms = [ term for term in ranked_terms if (term not in neg_terms)]
+        top_terms = top_terms[0:opt_maxNumberOfTerms]
+        
+        tfidf_bigram = tfidf.tfidf()
+        tfidf_bigram.tfidfArray = bigram_tfidf_data
+        tfidf_bigram.opt_docs = url_ids
+        tfidf_bigram.corpus = bigram_corpus
+        tfidf_bigram.mapping = es_info['mapping']
+        extract_terms_all = extract_terms.extract_terms(tfidf_bigram)
+        [ranked_terms, scores] = extract_terms_all.results(pos_terms)
+        top_bigrams = [ term for term in ranked_terms if (term not in neg_terms)]
+        
+        tfidf_trigram = tfidf.tfidf()
+        tfidf_trigram.tfidfArray = trigram_tfidf_data
+        tfidf_trigram.opt_docs = url_ids
+        tfidf_trigram.corpus = trigram_corpus
+        tfidf_trigram.mapping = es_info['mapping']
+        extract_terms_all = extract_terms.extract_terms(tfidf_trigram)
+        [ranked_terms, scores] = extract_terms_all.results(pos_terms)
+        top_trigrams = [ term for term in ranked_terms if (term not in neg_terms)]
+        top_trigrams = top_trigrams[0:opt_maxNumberOfTerms]
+        end = time.time()
+        print "Time to rank top terms by Bayesian sets = ", end-start
 
-          tfidf_trigram = tfidf.tfidf()
-          tfidf_trigram.tfidfArray = trigram_tfidf_data
-          tfidf_trigram.opt_docs = urls
-          tfidf_trigram.corpus = trigram_corpus
-          tfidf_trigram.mapping = es_info['mapping']
-          extract_terms_all = extract_terms.extract_terms(tfidf_trigram)
-          [ranked_terms, scores] = extract_terms_all.results(pos_terms)
-          top_trigrams = [ term for term in ranked_terms if (term not in neg_terms)]
-          top_trigrams = top_trigrams[0:opt_maxNumberOfTerms]
-        else:
-          top_terms = [term for term in tfidf_all.getTopTerms(opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms)]
-          top_bigrams = [term for term in top_bigrams if term not in neg_terms]
-          top_trigrams = [term for term in top_trigrams if term not in neg_terms]
-    else:
-      top_terms = [term for term in get_significant_terms(urls, opt_maxNumberOfTerms+len(neg_terms), mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es) if (term not in neg_terms)]
-      if len(text) > 0:
-        [_,_,_,_,_,_,top_bigrams, top_trigrams] = get_bigrams_trigrams.get_bigrams_trigrams(text, opt_maxNumberOfTerms+len(neg_terms), self._es)
+      else:
+        top_terms = [term for term in tfidf_all.getTopTerms(opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms)]
         top_bigrams = [term for term in top_bigrams if term not in neg_terms]
         top_trigrams = [term for term in top_trigrams if term not in neg_terms]
+        end = time.time()
+        print "Time to get top terms by sorting tfidf= ", end-start
+
+    # else:
+    #   top_terms = [term for term in get_significant_terms(urls, opt_maxNumberOfTerms+len(neg_terms), mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es) if (term not in neg_terms)]
+    #   if len(text) > 0:
+    #     [_,_,_,_,_,_,top_bigrams, top_trigrams] = get_bigrams_trigrams.get_bigrams_trigrams(text, opt_maxNumberOfTerms+len(neg_terms), self._es)
+    #     top_bigrams = [term for term in top_bigrams if term not in neg_terms]
+    #     top_trigrams = [term for term in top_trigrams if term not in neg_terms]
 
     # Remove bigrams and trigrams of just stopwords or numbers
     #**********************************************************
+    start = time.time()
+    
     from nltk import corpus
     ENGLISH_STOPWORDS = corpus.stopwords.words('english')
     count = 0
@@ -962,8 +989,14 @@ class DomainModel(object):
       if (((words[0] not in ENGLISH_STOPWORDS) and (not words[0].isdigit())) or ((words[1] not in ENGLISH_STOPWORDS) and (not words[1].isdigit()))) and count <= opt_maxNumberOfTerms:
         count = count + 1
         top_trigrams.append(phrase)
+
+    end = time.time()
+    print "Time to clean bigrams and trigrams = ", end-start
+
     #**********************************************************
 
+    start = time.time()
+    
     s_fields = {
       "tag": "Custom",
       "index": es_info['activeDomainIndex'],
@@ -990,6 +1023,11 @@ class DomainModel(object):
     if not top_terms:
       return []
 
+    end = time.time()
+    print "Time to remove already annotated terms = ", end-start
+
+    start = time.time()
+    
     results = term_search(es_info['mapping']['tag'], ['Relevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
     pos_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results["results"]}
     pos_urls = pos_data.keys();
@@ -1137,6 +1175,9 @@ class DomainModel(object):
       else:
         entry[key]["tag"].append("Custom")
 
+        end = time.time()
+    print "Time to compute terms in pos and neg pages = ", end-start
+    
     terms = [[key, entry[key]["pos_freq"], entry[key]["neg_freq"], entry[key]["tag"]] for key in custom_terms + top_terms + top_bigrams + top_trigrams]
 
     return terms
