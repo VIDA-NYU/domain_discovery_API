@@ -50,6 +50,7 @@ from elastic.delete import delete
 from ranking import tfidf, rank, extract_terms, word2vec, get_bigrams_trigrams
 
 from online_classifier.online_classifier import OnlineClassifier
+from online_classifier.tfidf_vector import tfidf_vectorizer
 
 #from topik import read_input, tokenize, vectorize, run_model, visualize, TopikProject
 
@@ -901,13 +902,10 @@ class DomainModel(object):
     print "Time to get query pages = ", end-start
 
     top_terms = []
-    top_bigrams = []
-    top_trigrams = []
 
     start = time.time()
     
     text = []
-    #urls = [hit["id"] for hit in results["results"] if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
     url_ids = [hit["id"] for hit in results["results"]][0:MAX_SAMPLE_PAGES]
     if(len(url_ids) > 0):
       results = get_documents_by_id(url_ids, [es_info['mapping']["url"], es_info['mapping']["text"]], es_info["activeDomainIndex"], es_info["docType"], self._es)
@@ -917,83 +915,21 @@ class DomainModel(object):
       print "Time to get text for 500 query pages = ", end-start
 
     if len(url_ids) > 0 and text:
-      start = time.time()
-      [bigram_tfidf_data, trigram_tfidf_data,_,_,bigram_corpus, trigram_corpus,top_bigrams, top_trigrams] = get_bigrams_trigrams.get_bigrams_trigrams(text, opt_maxNumberOfTerms+len(neg_terms), self._es)
-      end = time.time()
-      print "Time to compute bigrams and trigrams = ", end-start
 
       start = time.time()
-      tfidf_all = tfidf.tfidf(url_ids, pos_tags=self._pos_tags, mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
+      tfidf_v = tfidf_vectorizer(max_features=opt_maxNumberOfTerms+len(neg_terms), ngram_range=(1,3))
+      tfidf_v.tfidf(text)
       if pos_terms:
-        extract_terms_all = extract_terms.extract_terms(tfidf_all)
+        extract_terms_all = extract_terms.extract_terms(tfidf_v)
         [ranked_terms, scores] = extract_terms_all.results(pos_terms)
         top_terms = [ term for term in ranked_terms if (term not in neg_terms)]
         top_terms = top_terms[0:opt_maxNumberOfTerms]
-        
-        tfidf_bigram = tfidf.tfidf()
-        tfidf_bigram.tfidfArray = bigram_tfidf_data
-        tfidf_bigram.opt_docs = url_ids
-        tfidf_bigram.corpus = bigram_corpus
-        tfidf_bigram.mapping = es_info['mapping']
-        extract_terms_all = extract_terms.extract_terms(tfidf_bigram)
-        [ranked_terms, scores] = extract_terms_all.results(pos_terms)
-        top_bigrams = [ term for term in ranked_terms if (term not in neg_terms)]
-        
-        tfidf_trigram = tfidf.tfidf()
-        tfidf_trigram.tfidfArray = trigram_tfidf_data
-        tfidf_trigram.opt_docs = url_ids
-        tfidf_trigram.corpus = trigram_corpus
-        tfidf_trigram.mapping = es_info['mapping']
-        extract_terms_all = extract_terms.extract_terms(tfidf_trigram)
-        [ranked_terms, scores] = extract_terms_all.results(pos_terms)
-        top_trigrams = [ term for term in ranked_terms if (term not in neg_terms)]
-        top_trigrams = top_trigrams[0:opt_maxNumberOfTerms]
         end = time.time()
         print "Time to rank top terms by Bayesian sets = ", end-start
-
       else:
-        top_terms = [term for term in tfidf_all.getTopTerms(opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms)]
-        top_bigrams = [term for term in top_bigrams if term not in neg_terms]
-        top_trigrams = [term for term in top_trigrams if term not in neg_terms]
+        top_terms = [term for term in tfidf_v.getTopTerms(opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms)]
         end = time.time()
         print "Time to get top terms by sorting tfidf= ", end-start
-
-    # else:
-    #   top_terms = [term for term in get_significant_terms(urls, opt_maxNumberOfTerms+len(neg_terms), mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es) if (term not in neg_terms)]
-    #   if len(text) > 0:
-    #     [_,_,_,_,_,_,top_bigrams, top_trigrams] = get_bigrams_trigrams.get_bigrams_trigrams(text, opt_maxNumberOfTerms+len(neg_terms), self._es)
-    #     top_bigrams = [term for term in top_bigrams if term not in neg_terms]
-    #     top_trigrams = [term for term in top_trigrams if term not in neg_terms]
-
-    # Remove bigrams and trigrams of just stopwords or numbers
-    #**********************************************************
-    start = time.time()
-    
-    from nltk import corpus
-    ENGLISH_STOPWORDS = corpus.stopwords.words('english')
-    count = 0
-    bigrams = top_bigrams
-    top_bigrams = []
-    for phrase in bigrams:
-      words = phrase.split(" ")
-      if (((words[0] not in ENGLISH_STOPWORDS) and (not words[0].isdigit())) or ((words[1] not in ENGLISH_STOPWORDS) and (not words[1].isdigit()))) and count <= opt_maxNumberOfTerms:
-        count = count + 1
-        top_bigrams.append(phrase)
-
-
-    count = 0
-    trigrams = top_trigrams
-    top_trigrams = []
-    for phrase in trigrams:
-      words = phrase.split(" ")
-      if (((words[0] not in ENGLISH_STOPWORDS) and (not words[0].isdigit())) or ((words[1] not in ENGLISH_STOPWORDS) and (not words[1].isdigit()))) and count <= opt_maxNumberOfTerms:
-        count = count + 1
-        top_trigrams.append(phrase)
-
-    end = time.time()
-    print "Time to clean bigrams and trigrams = ", end-start
-
-    #**********************************************************
 
     start = time.time()
     
@@ -1009,14 +945,6 @@ class DomainModel(object):
     for term in custom_terms:
       try:
         top_terms = top_terms.remove(term)
-      except ValueError:
-        continue
-      try:
-        top_bigrams.remove(term)
-      except ValueError:
-        continue
-      try:
-        top_trigrams.remove(term)
       except ValueError:
         continue
 
@@ -1036,63 +964,31 @@ class DomainModel(object):
     total_pos_tf = None
     total_pos = 0
 
-    total_bigram_pos_tf = None
-    total_bigram_pos = 0
-
-    total_trigram_pos_tf = None
-    total_trigram_pos = 0
-
     pos_corpus = []
-    pos_bigram_corpus = []
-    pos_trigram_corpus = []
 
     if len(pos_urls) > 1:
-      [ttfs_pos,pos_corpus,_] = getTermFrequency(pos_urls, pos_tags=self._pos_tags, term_freq=MAX_TERM_FREQ, mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
-
-      total_pos_tf = np.sum(ttfs_pos, axis=0)
+      tfidf_pos = tfidf_vectorizer(ngram_range=(1,3))
+      [_, total_pos_tf, pos_corpus] = tfidf_pos.tfidf(pos_text)
+      total_pos_tf = np.sum(total_pos_tf, axis=0)
       total_pos = np.sum(total_pos_tf)
-
-      [_,_,bigram_tf_data,trigram_tf_data,pos_bigram_corpus, pos_trigram_corpus,_,_] = get_bigrams_trigrams.get_bigrams_trigrams(pos_text, opt_maxNumberOfTerms, self._es)
-
-
-      total_bigram_pos_tf = np.transpose(np.sum(bigram_tf_data, axis=0))
-      total_bigram_pos = np.transpose(np.sum(total_bigram_pos_tf))
-
-      total_trigram_pos_tf = trigram_tf_data.sum(axis=0)
-      total_trigram_pos = np.sum(total_trigram_pos_tf)
+      total_pos_tf = total_pos_tf.flatten().tolist()[0]
 
     results = term_search(es_info['mapping']['tag'], ['Irrelevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
     neg_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results["results"]}
     neg_urls = neg_data.keys();
     neg_text = neg_data.values();
 
-    neg_freq = {}
     total_neg_tf = None
     total_neg = 0
 
-    total_bigram_neg_tf = None
-    total_bigram_neg = 0
-
-    total_trigram_neg_tf = None
-    total_trigram_neg = 0
-
     neg_corpus = []
-    neg_bigram_corpus = []
-    neg_trigram_corpus = []
 
     if len(neg_urls) > 1:
-      [ttfs_neg,neg_corpus,_] = getTermFrequency(neg_urls, pos_tags=self._pos_tags, term_freq=MAX_TERM_FREQ, mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
-
-      total_neg_tf = np.sum(ttfs_neg, axis=0)
+      tfidf_neg = tfidf_vectorizer(ngram_range=(1,3))
+      [_, total_neg_tf, neg_corpus] = tfidf_neg.tfidf(neg_text)
+      total_neg_tf = np.sum(total_neg_tf, axis=0)
       total_neg = np.sum(total_neg_tf)
-
-      [_,_,bigram_tf_data,trigram_tf_data,neg_bigram_corpus, neg_trigram_corpus,_,_] = get_bigrams_trigrams.get_bigrams_trigrams(neg_text, opt_maxNumberOfTerms, self._es)
-
-      total_bigram_neg_tf = np.transpose(np.sum(bigram_tf_data, axis=0))
-      total_bigram_neg = np.sum(total_bigram_neg_tf)
-
-      total_trigram_neg_tf = np.transpose(trigram_tf_data.sum(axis=0))
-      total_trigram_neg = np.sum(total_trigram_neg_tf)
+      total_neg_tf = total_neg_tf.flatten().tolist()[0]
 
     entry = {}
     for key in top_terms + [term for term in custom_terms if term in pos_corpus or term in neg_corpus]:
@@ -1119,52 +1015,6 @@ class DomainModel(object):
       else:
         entry[key].update({"tag": []})
 
-    for key in top_bigrams + [term for term in custom_terms if term in pos_bigram_corpus or term in neg_bigram_corpus]:
-      if key in pos_bigram_corpus:
-        if total_bigram_pos != 0:
-          entry[key] = {"pos_freq": (float(total_bigram_pos_tf[pos_bigram_corpus.index(key)])/total_bigram_pos)}
-        else:
-          entry[key] = {"pos_freq": 0}
-      else:
-        entry[key] = {"pos_freq": 0}
-      if key in neg_bigram_corpus:
-        if total_bigram_neg != 0:
-          entry[key].update({"neg_freq": (float(total_bigram_neg_tf[neg_bigram_corpus.index(key)])/total_bigram_neg)})
-        else:
-          entry[key].update({"neg_freq": 0})
-      else:
-        entry[key].update({"neg_freq": 0})
-
-      if key in pos_terms:
-        entry[key].update({"tag": ["Positive"]})
-      elif key in neg_terms:
-        entry[key].update({"tag": ["Negative"]})
-      else:
-        entry[key].update({"tag": []})
-
-    for key in top_trigrams + [term for term in custom_terms if term in pos_trigram_corpus or term in neg_trigram_corpus]:
-      if key in pos_trigram_corpus:
-        if total_trigram_pos != 0:
-          entry[key] = {"pos_freq": (float(total_trigram_pos_tf[0,pos_trigram_corpus.index(key)])/total_trigram_pos)}
-        else:
-          entry[key] = {"pos_freq": 0}
-      else:
-        entry[key] = {"pos_freq": 0}
-      if key in neg_trigram_corpus:
-        if total_trigram_neg != 0:
-          entry[key].update({"neg_freq": (float(total_trigram_neg_tf[neg_trigram_corpus.index(key)])/total_trigram_neg)})
-        else:
-          entry[key].update({"neg_freq": 0})
-      else:
-        entry[key].update({"neg_freq": 0})
-
-      if key in pos_terms:
-        entry[key].update({"tag": ["Positive"]})
-      elif key in neg_terms:
-        entry[key].update({"tag": ["Negative"]})
-      else:
-        entry[key].update({"tag": []})
-
     for key in custom_terms:
       if entry.get(key) == None:
         entry[key] = {"pos_freq":0, "neg_freq":0, "tag":["Custom"]}
@@ -1178,7 +1028,7 @@ class DomainModel(object):
         end = time.time()
     print "Time to compute terms in pos and neg pages = ", end-start
     
-    terms = [[key, entry[key]["pos_freq"], entry[key]["neg_freq"], entry[key]["tag"]] for key in custom_terms + top_terms + top_bigrams + top_trigrams]
+    terms = [[key, entry[key]["pos_freq"], entry[key]["neg_freq"], entry[key]["tag"]] for key in custom_terms + top_terms] # + top_bigrams + top_trigrams
 
     return terms
 
