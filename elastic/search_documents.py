@@ -106,7 +106,7 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
     queries = []
     filter_q = None
 
-    print "\n\n\n",s_fields,"\n\n\n"
+    #print "\n\n\n",s_fields,"\n\n\n"
     
     for k,v in s_fields.items():
         if "queries" in k:
@@ -147,7 +147,7 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
     if filter_q is not None:
         query["filter"] = filter_q
 
-    print "\n\n\n MULTIFIELD TERM SEARCH \n", query,"\n\n\n"
+    #print "\n\n\n MULTIFIELD TERM SEARCH \n", query,"\n\n\n"
     
     res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pageCount)
     hits = res['hits']['hits']
