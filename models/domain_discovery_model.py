@@ -92,6 +92,7 @@ class DomainModel(object):
     self.pool = Pool(max_workers=3)
     self.seedfinder = RunSeedFinder()
     self.runningCrawlers={}
+    self.runningSeedFinders={}
 
     self._initACHE()
 
@@ -146,9 +147,16 @@ class DomainModel(object):
 
   def getStatus(self, session):
     status = {}
-    print "\n\n\nCRAWLERS ",self.runningCrawlers,"\n\n\n"
-    for k,v in self.runningCrawlers.items():
-      status["crawler"] = [{ "domain": v["domain"], "status": v["status"]}]
+
+    if len(self.runningCrawlers.keys()) > 0:
+      status["crawler"] = []
+      for k,v in self.runningCrawlers.items():
+        status["crawler"].append({"domain": v["domain"], "status": v["status"]})
+
+    if len(self.runningSeedFinders.keys()) > 0:
+      status["seedFinder"] = []
+      for k,v in self.runningSeedFinders.items():
+        status["seedFinder"].append({"domain": v["domain"], "status": v["status"], "description": v["description"]})
 
     return status
 
@@ -654,7 +662,8 @@ class DomainModel(object):
     Returns:
         None
     """
-    es_info = self._esInfo(session['domainId']);
+    domainId = session['domainId']
+    es_info = self._esInfo(domainId);
 
     data_dir = self._path + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
@@ -667,8 +676,25 @@ class DomainModel(object):
     print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
 
     # Execute SeedFinder in a new thread
-    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, es_info)
+    if self.runningSeedFinders.get(terms) is not None:
+      return self.runningSeedFinders[terms]['status']
 
+    self.runningSeedFinders[terms] = {"domain": self._domains[domainId]['domain_name'], "status": "Running", "description":"Query: "+terms}  
+    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, es_info)
+    p.add_done_callback(self._seedFinderDone)
+    self.runningSeedFinders[terms]["process"] = p
+    
+    return "Running"
+
+  def _seedFinderDone(self, p):
+    for k,v in self.runningSeedFinders.items():
+      if v["process"] == p:
+        self.runningSeedFinders[k]["status"] = "Completed"
+        print "\n\n\n SeedFinder ", k, " Completed \n\n\n"
+        break
+
+      
+        
 
 #######################################################################################################
 # Annotate Content
