@@ -109,7 +109,7 @@ class RunSeedFinder:
 
         ache_home = environ['ACHE_HOME']
         
-        comm = ache_home + "/bin/ache seedFinder --csvPath " + csv_file + " --initialQuery \"" +terms + "\" --modelPath " + crawlermodel_dir + " --seedsPath " + seed_dir + " --maxPages 2 --maxQueries 5"
+        comm = ache_home + "/bin/ache seedFinder --csvPath " + csv_file + " --initialQuery \"" +terms + "\" --modelPath " + crawlermodel_dir + " --seedsPath " + seed_dir + " --maxPages 2 --maxQueries 25"
 
         encoded_query = urllib.quote(terms).replace("%5C","")
 
