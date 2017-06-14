@@ -149,14 +149,14 @@ class DomainModel(object):
     status = {}
 
     if len(self.runningCrawlers.keys()) > 0:
-      status["crawler"] = []
+      status["Crawler"] = []
       for k,v in self.runningCrawlers.items():
-        status["crawler"].append({"domain": v["domain"], "status": v["status"]})
+        status["Crawler"].append({"domain": v["domain"], "status": v["status"]})
 
     if len(self.runningSeedFinders.keys()) > 0:
-      status["seedFinder"] = []
+      status["SeedFinder"] = []
       for k,v in self.runningSeedFinders.items():
-        status["seedFinder"].append({"domain": v["domain"], "status": v["status"], "description": v["description"]})
+        status["SeedFinder"].append({"domain": v["domain"], "status": v["status"], "description": v["description"]})
 
     return status
 
@@ -679,23 +679,16 @@ class DomainModel(object):
     if self.runningSeedFinders.get(terms) is not None:
       return self.runningSeedFinders[terms]['status']
 
-    self.runningSeedFinders[terms] = {"domain": self._domains[domainId]['domain_name'], "status": "Running", "description":"Query: "+terms}  
-    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, es_info)
-    p.add_done_callback(self._seedFinderDone)
+    self.runningSeedFinders[terms] = {"domain": self._domains[domainId]['domain_name'], "status": "Starting", "description":"Query: "+terms}  
+    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, self._updateSeedFinderStatus, es_info)
     self.runningSeedFinders[terms]["process"] = p
     
-    return "Running"
+    return "Starting"
 
-  def _seedFinderDone(self, p):
-    for k,v in self.runningSeedFinders.items():
-      if v["process"] == p:
-        self.runningSeedFinders[k]["status"] = "Completed"
-        print "\n\n\n SeedFinder ", k, " Completed \n\n\n"
-        break
-
-      
-        
-
+  #Method to update the seed finder status
+  def _updateSeedFinderStatus(self, terms, status):
+    self.runningSeedFinders[terms]["status"] = status
+  
 #######################################################################################################
 # Annotate Content
 #######################################################################################################
@@ -2116,10 +2109,10 @@ class DomainModel(object):
       ache_home = environ['ACHE_HOME']
       comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt"
       p = Popen(shlex.split(comm))
-      self.runningCrawlers[domainId] = {'process': p, 'domain': self._domains[domainId]['domain_name'], 'status': "Crawler is running" }
+      self.runningCrawlers[domainId] = {'process': p, 'domain': self._domains[domainId]['domain_name'], 'status': "Running" }
 
-      return "Crawler is running"
-    return "Crawler running for domain: " + self._domains[self.runningCrawlers.keys()[0]]['domain_name']
+      return "Running"
+    return "Running in domain: " + self._domains[self.runningCrawlers.keys()[0]]['domain_name']
 
   def stopCrawler(self, session):
     """ Stop the ACHE crawler for the specfied domain with the domain model. The
@@ -2140,7 +2133,7 @@ class DomainModel(object):
 
     print "\n\n\nSHUTTING DOWN\n\n\n"
 
-    self.runningCrawlers[domainId]['status'] = "Crawler shutting down"
+    self.runningCrawlers[domainId]['status'] = "Terminating"
 
     p.wait()
 
