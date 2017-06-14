@@ -665,21 +665,26 @@ class DomainModel(object):
     domainId = session['domainId']
     es_info = self._esInfo(domainId);
 
-    data_dir = self._path + "/data/"
-    data_domain  = data_dir + es_info['activeDomainIndex']
-
-    domainmodel_dir = data_domain + "/models/"
-
-    if (not isfile(domainmodel_dir+"pageclassifier.model")):
-      self.createModel(session, zip=False)
-
-    print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
 
     # Execute SeedFinder in a new thread
     if self.runningSeedFinders.get(terms) is not None:
       return self.runningSeedFinders[terms]['status']
 
+    data_dir = self._path + "/data/"
+    data_domain  = data_dir + es_info['activeDomainIndex']
+
+    domainmodel_dir = data_domain + "/models/"
+
     self.runningSeedFinders[terms] = {"domain": self._domains[domainId]['domain_name'], "status": "Starting", "description":"Query: "+terms}  
+
+    if (not isfile(domainmodel_dir+"pageclassifier.model")):
+      self.runningSeedFinders[terms]["status"] = "Creating Model"
+      self.createModel(session, zip=False)
+
+    print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
+
+    self.runningSeedFinders[terms]["status"] = "Starting"
+    
     p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, self._updateSeedFinderStatus, es_info)
     self.runningSeedFinders[terms]["process"] = p
     
