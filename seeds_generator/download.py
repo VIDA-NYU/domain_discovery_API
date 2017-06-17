@@ -60,6 +60,8 @@ def callDownloadUrls(query, subquery, urls_str, es_info):
   urls = urls_str.split(" ")
   url_size = 0
   num_pages = 0
+
+  print "\n\n\n Downloading URLS \n", urls, "\n\n\n"
   if len(urls) >= step:
     for url_size in range(0, len(urls), step):
       comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar Download_urls -q \"" + query + "\" -u \"" + " ".join(urls[url_size:url_size + step]) + "\"" \
