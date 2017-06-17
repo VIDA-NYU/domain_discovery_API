@@ -185,6 +185,13 @@ class Page(object):
     cherrypy.response.headers["Content-Type"] = "text/plain;"
     return self._model.stopCrawler(session)
 
+  # Stop Process
+  @cherrypy.expose
+  def stopProcess(self, process, process_info):
+    process_info = json.loads(process_info)
+    cherrypy.response.headers["Content-Type"] = "text/plain;"
+    return self._model.stopProcess(process, process_info)
+
   # Returns number of pages downloaded between ts1 and ts2 for active crawler.
   # ts1 and ts2 are Unix epochs (seconds after 1970).
   # If opt_applyFilter is True, the summary returned corresponds to the applied pages filter defined

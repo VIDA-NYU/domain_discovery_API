@@ -160,6 +160,22 @@ class DomainModel(object):
 
     return status
 
+  def stopProcess(self, process, process_info):
+    print "Stop Process ",process," ",process_info
+    if process == "Crawler":
+      session = {"domainId": self.runningCrawlers.keys()[0]}
+      self.stopCrawler(session)
+    elif process == "SeedFinder":
+      query = process_info["description"].replace('Query: ', '')
+      self.stopSeedFinder(query)
+
+    message = "Stopped process " + process
+    description = process_info.get("description")
+    if not description is None:
+      message = message + " for " + description
+
+    return message
+      
   def getAvailableProjectionAlgorithms(self):
     return [{'name': key} for key in self.projectionsAlg.keys()]
 
@@ -668,14 +684,15 @@ class DomainModel(object):
 
     # Execute SeedFinder in a new thread
     if self.runningSeedFinders.get(terms) is not None:
-      return self.runningSeedFinders[terms]['status']
+      if not self.runningSeedFinders[terms]['shouldTerminate']:
+        return self.runningSeedFinders[terms]['status']
 
     data_dir = self._path + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
 
     domainmodel_dir = data_domain + "/models/"
 
-    self.runningSeedFinders[terms] = {"domain": self._domains[domainId]['domain_name'], "status": "Starting", "description":"Query: "+terms}  
+    self.runningSeedFinders[terms] = {"domain": self._domains[domainId]['domain_name'], "status": "Starting", "description":"Query: "+terms, 'shouldTerminate': False}  
 
     if (not isfile(domainmodel_dir+"pageclassifier.model")):
       self.runningSeedFinders[terms]["status"] = "Creating Model"
@@ -684,15 +701,45 @@ class DomainModel(object):
     print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
 
     self.runningSeedFinders[terms]["status"] = "Starting"
-    
-    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, self._updateSeedFinderStatus, es_info)
-    self.runningSeedFinders[terms]["process"] = p
-    
+
+    if not self.runningSeedFinders[terms]['shouldTerminate']:
+      p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, self._updateSeedFinderStatus, self._seedfinderShouldTerminate, es_info)
+      self.runningSeedFinders[terms]["process"] = p
+      p.add_done_callback(self._seedfinderCompleted)
+    else:
+      del self.runningSeedFinders[terms]
+      return "Terminated"
+      
     return "Starting"
 
+  def stopSeedFinder(self, terms):
+    self.runningSeedFinders[terms]['status'] = "Terminating"
+    self.runningSeedFinders[terms]['shouldTerminate'] = True
+    if not self.runningSeedFinders[terms].get('terminate_process') is None:
+      self.runningSeedFinders[terms]['terminate_process'].kill()
+
+    print "\n\n\nSeedFinder terminating for ", terms," \n\n\n"
+
+    return "Terminating"
+
   #Method to update the seed finder status
-  def _updateSeedFinderStatus(self, terms, status):
-    self.runningSeedFinders[terms]["status"] = status
+  def _updateSeedFinderStatus(self, terms, field, value):
+    self.runningSeedFinders[terms][field] = value
+
+  def _seedfinderShouldTerminate(self, terms):
+    return self.runningSeedFinders[terms]['shouldTerminate']
+
+  def _seedfinderCompleted(self, p):
+    for k,v in self.runningSeedFinders.items():
+      if v["process"] == p:
+        if self.runningSeedFinders[k]['shouldTerminate']:
+          del self.runningSeedFinders[k]
+          print "\n\n\nSeedFinder terminated for ", k," \n\n\n"
+        else:
+          print "\n\n\n SeedFinder COMPLETED for ", k, "\n\n\n"
+          if not self.runningSeedFinders[k]['status'] == "No relevant results":
+            self.runningSeedFinders[k]['status'] = "Completed"
+        break
   
 #######################################################################################################
 # Annotate Content
@@ -2136,7 +2183,7 @@ class DomainModel(object):
 
     p.terminate()
 
-    print "\n\n\nSHUTTING DOWN\n\n\n"
+    print "\n\n\nCrawler Shutting Down\n\n\n"
 
     self.runningCrawlers[domainId]['status'] = "Terminating"
 
