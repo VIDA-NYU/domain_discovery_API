@@ -61,11 +61,9 @@ public class BingSearch {
 	Download download = new Download(query, null, es_index, es_doc_type, es_server);
 	ArrayList<String> results = new ArrayList<String>();
 	    
-	query = query.replaceAll(" ", "%20");
-
 	try {
 	    int step = 10; //Bing can return maximum 50 results per query
-	    URIBuilder builder = new URIBuilder("https://api.cognitive.microsoft.com/bing/v7.0/search");
+	    URIBuilder builder = new URIBuilder("https://api.cognitive.microsoft.com/bing/v5.0/search");
 	    builder.setParameter("q", query);
 	    builder.setParameter("count", String.valueOf(step));
 	    builder.setParameter("mkt", "en-us");
@@ -78,7 +76,7 @@ public class BingSearch {
 
                 HttpGet request = new HttpGet(uri);
                 request.setHeader("Ocp-Apim-Subscription-Key", this.accountKey);
-
+		
                 HttpResponse response = httpclient.execute(request);
                 HttpEntity entity = response.getEntity();
 
@@ -92,6 +90,14 @@ public class BingSearch {
 		    for (int i=0; i<webpages.length(); i++){
 			JSONObject item = webpages.getJSONObject(i);
 			String url = (String)item.get("url");
+            try {
+                //Bing Search v5 returns weird url format, e.g., http://www.bing.com/cr?IG=1C80F8C1C1B04D4C866FD62099EF9E4E&CID=2291C45E2291669401DFCEFC23976733&rd=1&h=e9ZvWOedIV321QOg-FnBNtNHTR9Oo3Yqss9bCRYsT9o&v=1&r=http://www.cse.unsw.edu.au/%7Ecs9417ml/RL1/introduction.html&p=DevEx,5168.1. The following code remove the boilerplate
+                url = url.split(",")[0].split("v=1&r=")[1];
+                url = java.net.URLDecoder.decode(url, "UTF-8");
+            }
+            catch (Exception ex) {
+                url = (String)item.get("displayUrl");
+            }
 			results.add(url);
 			//System.out.println(url);
 			
@@ -149,7 +155,7 @@ public class BingSearch {
 	    }
 	    ++i;
 	}
-	
+
 	BingSearch bs = new BingSearch();
 	bs.search(query, start, top, es_index, es_doc_type, es_server);
     }

@@ -111,6 +111,13 @@ class Page(object):
     return json.dumps(result)
 
   @cherrypy.expose
+  def getAvailableCrawledData(self, session):
+    session = json.loads(session)
+    result = self._model.getAvailableCrawledData(session)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(result)
+  
+  @cherrypy.expose
   def getAnnotatedTerms(self, session):
     session = json.loads(session)
     result = self._model.getAnnotatedTerms(session)
@@ -177,6 +184,13 @@ class Page(object):
     session = json.loads(session)
     cherrypy.response.headers["Content-Type"] = "text/plain;"
     return self._model.stopCrawler(session)
+
+  # Stop Process
+  @cherrypy.expose
+  def stopProcess(self, process, process_info):
+    process_info = json.loads(process_info)
+    cherrypy.response.headers["Content-Type"] = "text/plain;"
+    return self._model.stopProcess(process, process_info)
 
   # Returns number of pages downloaded between ts1 and ts2 for active crawler.
   # ts1 and ts2 are Unix epochs (seconds after 1970).
@@ -326,8 +340,10 @@ class Page(object):
 
   # Extracts terms with current labels state.
   @cherrypy.expose
-  def extractTerms(self, positiveTerms, negativeTerms, neutralTerms):
-    res = self._seedCrawler.extractTerms(positiveTerms, negativeTerms, neutralTerms)
+  def extractTerms(self, numberOfTerms, session):
+    session = json.loads(session)
+    numberOfTerms = int(numberOfTerms)
+    res = self._model.extractTerms(numberOfTerms, session)
 
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)

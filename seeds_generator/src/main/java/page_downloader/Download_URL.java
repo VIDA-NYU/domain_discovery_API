@@ -301,7 +301,7 @@ public class Download_URL implements Runnable {
 	    }
         }
 	
-	elapsedTime = (new Date()).getTime() - startTime;
+	elapsedTime = System.currentTimeMillis() - startTime;
 	System.err.println("\n\n\nTime Elapsed time for " + url + " thread = "+String.valueOf(elapsedTime/1000.0)+" secs \n\n\n");
     }
 }

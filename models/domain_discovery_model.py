@@ -9,6 +9,7 @@ from itertools import product
 import json;
 from signal import SIGTERM
 import shlex
+from pprint import pprint
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -29,7 +30,7 @@ from zipfile import ZipFile
 
 from elasticsearch import Elasticsearch
 
-from seeds_generator.download import callDownloadUrls, getImage
+from seeds_generator.download import callDownloadUrls, getImage, getDescription
 from seeds_generator.runSeedFinder import RunSeedFinder
 from seeds_generator.concat_nltk import get_bag_of_words
 from elastic.get_config import get_available_domains, get_mapping, get_tag_colors
@@ -49,6 +50,7 @@ from elastic.delete import delete
 from ranking import tfidf, rank, extract_terms, word2vec, get_bigrams_trigrams
 
 from online_classifier.online_classifier import OnlineClassifier
+from online_classifier.tfidf_vector import tfidf_vectorizer
 
 #from topik import read_input, tokenize, vectorize, run_model, visualize, TopikProject
 
@@ -59,7 +61,8 @@ import urllib2
 MAX_TEXT_LENGTH = 3000
 MAX_TERM_FREQ = 2
 MAX_LABEL_PAGES = 2000
-
+MAX_SAMPLE_PAGES = 500
+ 
 class DomainModel(object):
 
   w2v = word2vec.word2vec(from_es=False)
@@ -78,7 +81,7 @@ class DomainModel(object):
     create_config_index()
     create_terms_index()
 
-    self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain"}
+    self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain", "title":"title"}
     self._domains = None
     self._onlineClassifiers = {}
     self._pos_tags = ['NN', 'NNS', 'NNP', 'NNPS', 'FW', 'JJ']
@@ -89,6 +92,7 @@ class DomainModel(object):
     self.pool = Pool(max_workers=3)
     self.seedfinder = RunSeedFinder()
     self.runningCrawlers={}
+    self.runningSeedFinders={}
 
     self._initACHE()
 
@@ -142,15 +146,36 @@ class DomainModel(object):
     self._path = path
 
   def getStatus(self, session):
-    domainId = session['domainId']
     status = {}
-    if self.runningCrawlers.get(domainId) is not None:
-      print "\n\n\n RUNNING CRAWLERS ", self.runningCrawlers,"\n\n\n"
-      status["crawler"] = self.runningCrawlers[domainId]['message']
 
-    print "\n\n\n Status ",status,"\n\n\n" 
+    if len(self.runningCrawlers.keys()) > 0:
+      status["Crawler"] = []
+      for k,v in self.runningCrawlers.items():
+        status["Crawler"].append({"domain": v["domain"], "status": v["status"]})
+
+    if len(self.runningSeedFinders.keys()) > 0:
+      status["SeedFinder"] = []
+      for k,v in self.runningSeedFinders.items():
+        status["SeedFinder"].append({"domain": v["domain"], "status": v["status"], "description": v["description"]})
+
     return status
-    
+
+  def stopProcess(self, process, process_info):
+    print "Stop Process ",process," ",process_info
+    if process == "Crawler":
+      session = {"domainId": self.runningCrawlers.keys()[0]}
+      self.stopCrawler(session)
+    elif process == "SeedFinder":
+      query = process_info["description"].replace('Query: ', '')
+      self.stopSeedFinder(query)
+
+    message = "Stopped process " + process
+    description = process_info.get("description")
+    if not description is None:
+      message = message + " for " + description
+
+    return message
+      
   def getAvailableProjectionAlgorithms(self):
     return [{'name': key} for key in self.projectionsAlg.keys()]
 
@@ -204,19 +229,6 @@ class DomainModel(object):
     """
     es_info = self._esInfo(session['domainId'])
     queries = get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
-    query = {
-      "query" : {
-        "filtered" : {
-          "filter" : {
-            "missing" : { "field" : "query"}
-          }
-        }
-      }
-    }
-    crawlData = self._es.count(es_info['activeDomainIndex'], es_info['docType'],body=query)
-    count = crawlData['count']
-    if count > 0:
-      queries["Crawled Data"] = count
 
     return queries
 
@@ -259,18 +271,37 @@ class DomainModel(object):
   def getAvailableModelTags(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    self.predictUnlabeled(session)
+    return self.predictUnlabeled(session)
 
-    unsure_tags = self._getUnsureLabelPages(session)
-    unique_tags = {"Unsure": len(unsure_tags)}
+  def getAvailableCrawledData(self, session):
+    es_info = self._esInfo(session['domainId'])
 
-    relevant_tags = self._getPosLabelPages(session)
-    unique_tags["Maybe relevant"] = len(relevant_tags)
+    unique_tags = {}
+    
+    query = {
+      "query" : {
+        "term" : {
+          "isRelevant": "relevant"
+        }
+      }
+    }
+    crawlData = self._es.count(es_info['activeDomainIndex'], es_info['docType'],body=query, request_timeout=30)
+    count = crawlData['count']
+    unique_tags["CD Relevant"] = count
 
-    irrelevant_tags = self._getNegLabelPages(session)
-    unique_tags["Maybe irrelevant"] = len(irrelevant_tags)
+    query = {
+      "query" : {
+        "term" : {
+          "isRelevant": "irrelevant"
+        }
+      }
+    }
+    crawlData = self._es.count(es_info['activeDomainIndex'], es_info['docType'],body=query, request_timeout=30)
+    count = crawlData['count']
+    unique_tags["CD Irrelevant"] = count
 
     return unique_tags
+
 
   def getPagesSummaryDomain(self, opt_ts1 = None, opt_ts2 = None, opt_applyFilter = False, session = None):
 
@@ -404,7 +435,8 @@ class DomainModel(object):
       "doc_type": es_info['docType'],
     }
 
-    tags = multifield_term_search(s_fields, self._capTerms, ['tag'], self._termsIndex, 'terms', self._es)
+    results = multifield_term_search(s_fields, 0, self._capTerms, ['tag'], self._termsIndex, 'terms', self._es)
+    tags = results["results"]
 
     tag = []
     if tags:
@@ -425,14 +457,15 @@ class DomainModel(object):
       "doc_type": es_info['docType']
     }
 
-    hits = multifield_term_search(s_fields, self._all, ['tag','term'], self._termsIndex, 'terms', self._es)
+    results = multifield_term_search(s_fields, 0, self._all, ['tag','term'], self._termsIndex, 'terms', self._es)
 
-    result = {}
+    hits = results["results"]
+    terms = {}
     for hit in hits:
       term = hit['term'][0]
-      result[term] = {'tag':hit['tag'][0]}
+      terms[term] = {'tag':hit['tag'][0]}
 
-    return result
+    return terms
 
   # Add domain
   def addDomain(self, index_name):
@@ -457,7 +490,7 @@ class DomainModel(object):
       # Delete Index
       delete_index(index, self._es)
       # Delete terms tagged for the index
-      ddt_terms_keys = [doc["id"] for doc in term_search("index", [index], self._all, ["term"], "ddt_terms", "terms", self._es)]
+      ddt_terms_keys = [doc["id"] for doc in term_search("index", [index], 0, self._all, ["term"], "ddt_terms", "terms", self._es)["results"]]
       delete_document(ddt_terms_keys, "ddt_terms", "terms", self._es)
 
       #Delete all the data for the index
@@ -468,7 +501,7 @@ class DomainModel(object):
 
     # Delete indices from config index
     delete_document(domains.keys(), "config", "domains", self._es)
-    
+
 
   def updateColors(self, session, colors):
     es_info = self._esInfo(session['domainId'])
@@ -519,7 +552,7 @@ class DomainModel(object):
       top = int(session['pagesCap'])
     else:
       top = max_url_count
-      
+
     if 'GOOG' in session['search_engine']:
       comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -t ' + str(top) + \
              ' -q "' + terms.replace('"','\\"')  + '"' + \
@@ -645,22 +678,69 @@ class DomainModel(object):
     Returns:
         None
     """
-    es_info = self._esInfo(session['domainId']);
+    domainId = session['domainId']
+    es_info = self._esInfo(domainId);
+
+
+    # Execute SeedFinder in a new thread
+    if self.runningSeedFinders.get(terms) is not None:
+      if not self.runningSeedFinders[terms]['shouldTerminate']:
+        return self.runningSeedFinders[terms]['status']
 
     data_dir = self._path + "/data/"
     data_domain  = data_dir + es_info['activeDomainIndex']
 
     domainmodel_dir = data_domain + "/models/"
 
+    self.runningSeedFinders[terms] = {"domain": self._domains[domainId]['domain_name'], "status": "Starting", "description":"Query: "+terms, 'shouldTerminate': False}  
+
     if (not isfile(domainmodel_dir+"pageclassifier.model")):
+      self.runningSeedFinders[terms]["status"] = "Creating Model"
       self.createModel(session, zip=False)
 
     print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
 
-    # Execute SeedFinder in a new thread
-    p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, es_info)
+    self.runningSeedFinders[terms]["status"] = "Starting"
 
+    if not self.runningSeedFinders[terms]['shouldTerminate']:
+      p = self.pool.submit(self.seedfinder.execSeedFinder, terms, self._path, self._updateSeedFinderStatus, self._seedfinderShouldTerminate, es_info)
+      self.runningSeedFinders[terms]["process"] = p
+      p.add_done_callback(self._seedfinderCompleted)
+    else:
+      del self.runningSeedFinders[terms]
+      return "Terminated"
+      
+    return "Starting"
 
+  def stopSeedFinder(self, terms):
+    self.runningSeedFinders[terms]['status'] = "Terminating"
+    self.runningSeedFinders[terms]['shouldTerminate'] = True
+    if not self.runningSeedFinders[terms].get('terminate_process') is None:
+      self.runningSeedFinders[terms]['terminate_process'].kill()
+
+    print "\n\n\nSeedFinder terminating for ", terms," \n\n\n"
+
+    return "Terminating"
+
+  #Method to update the seed finder status
+  def _updateSeedFinderStatus(self, terms, field, value):
+    self.runningSeedFinders[terms][field] = value
+
+  def _seedfinderShouldTerminate(self, terms):
+    return self.runningSeedFinders[terms]['shouldTerminate']
+
+  def _seedfinderCompleted(self, p):
+    for k,v in self.runningSeedFinders.items():
+      if v["process"] == p:
+        if self.runningSeedFinders[k]['shouldTerminate']:
+          del self.runningSeedFinders[k]
+          print "\n\n\nSeedFinder terminated for ", k," \n\n\n"
+        else:
+          print "\n\n\n SeedFinder COMPLETED for ", k, "\n\n\n"
+          if not self.runningSeedFinders[k]['status'] == "No relevant results":
+            self.runningSeedFinders[k]['status'] = "Completed"
+        break
+  
 #######################################################################################################
 # Annotate Content
 #######################################################################################################
@@ -778,8 +858,8 @@ class DomainModel(object):
     tags = []
     for term in terms:
       s_fields["term"] = term
-      res = multifield_term_search(s_fields, 1, ['tag'], self._termsIndex, 'terms', self._es)
-      tags.extend(res)
+      res = multifield_term_search(s_fields, 0, 1, ['tag'], self._termsIndex, 'terms', self._es)
+      tags.extend(res["results"])
 
     results = {result['id']: result['tag'][0] for result in tags}
 
@@ -855,6 +935,8 @@ class DomainModel(object):
 
     """
 
+    start_func = time.time()
+    
     es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
@@ -869,179 +951,115 @@ class DomainModel(object):
       "doc_type": es_info['docType']
     }
 
-    pos_terms = [field['term'][0] for field in multifield_term_search(s_fields, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)]
+    start = time.time()
+    
+    results = multifield_term_search(s_fields, 0, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)
+    pos_terms = [field['term'][0] for field in results["results"]]
 
     s_fields["tag"]="Negative"
-    neg_terms = [field['term'][0] for field in multifield_term_search(s_fields, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)]
+    results = multifield_term_search(s_fields, 0, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)
+    neg_terms = [field['term'][0] for field in results["results"]]
 
+    end = time.time()
+    print "Time to get pos and neg terms = ", end-start
+
+    start = time.time()
+    
     # Get selected pages displayed in the MDS window
+    session["from"] = 0
     results = self._getPagesQuery(session)
 
+    end = time.time()
+    print "Time to get query pages = ", end-start
+
     top_terms = []
-    top_bigrams = []
-    top_trigrams = []
 
+    start = time.time()
+    
     text = []
-    urls = [hit["id"] for hit in results if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
-    if(len(urls) > 0):
-      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results if (hit.get(es_info['mapping']["tag"]) is not None) and ("Relevant" in hit[es_info['mapping']["tag"]])]
-    else:
-      urls = [hit["id"] for hit in results]
-      # If positive urls are not available then get the most recent documents
-      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results if hit[es_info['mapping']["text"]][0] != ""]
+    url_ids = [hit["id"] for hit in results["results"]][0:MAX_SAMPLE_PAGES]
+    if(len(url_ids) > 0):
+      results = get_documents_by_id(url_ids, [es_info['mapping']["url"], es_info['mapping']["text"]], es_info["activeDomainIndex"], es_info["docType"], self._es)
+      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results]
 
-    if session["filter"] == "" or session["filter"] is None:
-      if len(urls) > 0 and text:
-        [bigram_tfidf_data, trigram_tfidf_data,_,_,bigram_corpus, trigram_corpus,top_bigrams, top_trigrams] = get_bigrams_trigrams.get_bigrams_trigrams(text, opt_maxNumberOfTerms+len(neg_terms), self._es)
+      end = time.time()
+      print "Time to get text for 500 query pages = ", end-start
 
-        tfidf_all = tfidf.tfidf(urls, pos_tags=self._pos_tags, mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
-        if pos_terms:
-          extract_terms_all = extract_terms.extract_terms(tfidf_all)
-          [ranked_terms, scores] = extract_terms_all.results(pos_terms)
-          top_terms = [ term for term in ranked_terms if (term not in neg_terms)]
-          top_terms = top_terms[0:opt_maxNumberOfTerms]
+    if len(url_ids) > 0 and text:
 
-          tfidf_bigram = tfidf.tfidf()
-          tfidf_bigram.tfidfArray = bigram_tfidf_data
-          tfidf_bigram.opt_docs = urls
-          tfidf_bigram.corpus = bigram_corpus
-          tfidf_bigram.mapping = es_info['mapping']
-          extract_terms_all = extract_terms.extract_terms(tfidf_bigram)
-          [ranked_terms, scores] = extract_terms_all.results(pos_terms)
-          top_bigrams = [ term for term in ranked_terms if (term not in neg_terms)]
+      start = time.time()
+      tfidf_v = tfidf_vectorizer(max_features=opt_maxNumberOfTerms+len(neg_terms), ngram_range=(1,3))
+      tfidf_v.tfidf(text)
+      if pos_terms:
+        extract_terms_all = extract_terms.extract_terms(tfidf_v)
+        [ranked_terms, scores] = extract_terms_all.results(pos_terms)
+        top_terms = [ term for term in ranked_terms if (term not in neg_terms)]
+        top_terms = top_terms[0:opt_maxNumberOfTerms]
+        end = time.time()
+        print "Time to rank top terms by Bayesian sets = ", end-start
+      else:
+        top_terms = [term for term in tfidf_v.getTopTerms(opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms)]
+        end = time.time()
+        print "Time to get top terms by sorting tfidf= ", end-start
 
-          tfidf_trigram = tfidf.tfidf()
-          tfidf_trigram.tfidfArray = trigram_tfidf_data
-          tfidf_trigram.opt_docs = urls
-          tfidf_trigram.corpus = trigram_corpus
-          tfidf_trigram.mapping = es_info['mapping']
-          extract_terms_all = extract_terms.extract_terms(tfidf_trigram)
-          [ranked_terms, scores] = extract_terms_all.results(pos_terms)
-          top_trigrams = [ term for term in ranked_terms if (term not in neg_terms)]
-          top_trigrams = top_trigrams[0:opt_maxNumberOfTerms]
-        else:
-          top_terms = [term for term in tfidf_all.getTopTerms(opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms)]
-          top_bigrams = [term for term in top_bigrams if term not in neg_terms]
-          top_trigrams = [term for term in top_trigrams if term not in neg_terms]
-    else:
-      top_terms = [term for term in get_significant_terms(urls, opt_maxNumberOfTerms+len(neg_terms), mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es) if (term not in neg_terms)]
-      if len(text) > 0:
-        [_,_,_,_,_,_,top_bigrams, top_trigrams] = get_bigrams_trigrams.get_bigrams_trigrams(text, opt_maxNumberOfTerms+len(neg_terms), self._es)
-        top_bigrams = [term for term in top_bigrams if term not in neg_terms]
-        top_trigrams = [term for term in top_trigrams if term not in neg_terms]
-
-    # Remove bigrams and trigrams of just stopwords or numbers
-    #**********************************************************
-    from nltk import corpus
-    ENGLISH_STOPWORDS = corpus.stopwords.words('english')
-    count = 0
-    bigrams = top_bigrams
-    top_bigrams = []
-    for phrase in bigrams:
-      words = phrase.split(" ")
-      if (((words[0] not in ENGLISH_STOPWORDS) and (not words[0].isdigit())) or ((words[1] not in ENGLISH_STOPWORDS) and (not words[1].isdigit()))) and count <= opt_maxNumberOfTerms:
-        count = count + 1
-        top_bigrams.append(phrase)
-
-
-    count = 0
-    trigrams = top_trigrams
-    top_trigrams = []
-    for phrase in trigrams:
-      words = phrase.split(" ")
-      if (((words[0] not in ENGLISH_STOPWORDS) and (not words[0].isdigit())) or ((words[1] not in ENGLISH_STOPWORDS) and (not words[1].isdigit()))) and count <= opt_maxNumberOfTerms:
-        count = count + 1
-        top_trigrams.append(phrase)
-    #**********************************************************
-
+    start = time.time()
+    
     s_fields = {
       "tag": "Custom",
       "index": es_info['activeDomainIndex'],
       "doc_type": es_info['docType']
     }
 
-    custom_terms = [field['term'][0] for field in multifield_query_search(s_fields, 500, ['term'], self._termsIndex, 'terms', self._es)]
+    results = multifield_query_search(s_fields, 0, 500, ['term'], self._termsIndex, 'terms', self._es)
+    custom_terms = [field['term'][0] for field in results["results"]]
 
     for term in custom_terms:
       try:
         top_terms = top_terms.remove(term)
       except ValueError:
         continue
-      try:
-        top_bigrams.remove(term)
-      except ValueError:
-        continue
-      try:
-        top_trigrams.remove(term)
-      except ValueError:
-        continue
 
     if not top_terms:
       return []
 
-    pos_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in term_search(es_info['mapping']['tag'], ['Relevant'], self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)}
+    end = time.time()
+    print "Time to remove already annotated terms = ", end-start
+
+    start = time.time()
+    
+    results = term_search(es_info['mapping']['tag'], ['Relevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    pos_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results["results"]}
     pos_urls = pos_data.keys();
     pos_text = pos_data.values();
 
     total_pos_tf = None
     total_pos = 0
 
-    total_bigram_pos_tf = None
-    total_bigram_pos = 0
-
-    total_trigram_pos_tf = None
-    total_trigram_pos = 0
-
     pos_corpus = []
-    pos_bigram_corpus = []
-    pos_trigram_corpus = []
 
     if len(pos_urls) > 1:
-      [ttfs_pos,pos_corpus,_] = getTermFrequency(pos_urls, pos_tags=self._pos_tags, term_freq=MAX_TERM_FREQ, mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
-
-      total_pos_tf = np.sum(ttfs_pos, axis=0)
+      tfidf_pos = tfidf_vectorizer(ngram_range=(1,3))
+      [_, total_pos_tf, pos_corpus] = tfidf_pos.tfidf(pos_text)
+      total_pos_tf = np.sum(total_pos_tf, axis=0)
       total_pos = np.sum(total_pos_tf)
+      total_pos_tf = total_pos_tf.flatten().tolist()[0]
 
-      [_,_,bigram_tf_data,trigram_tf_data,pos_bigram_corpus, pos_trigram_corpus,_,_] = get_bigrams_trigrams.get_bigrams_trigrams(pos_text, opt_maxNumberOfTerms, self._es)
-
-
-      total_bigram_pos_tf = np.transpose(np.sum(bigram_tf_data, axis=0))
-      total_bigram_pos = np.transpose(np.sum(total_bigram_pos_tf))
-
-      total_trigram_pos_tf = trigram_tf_data.sum(axis=0)
-      total_trigram_pos = np.sum(total_trigram_pos_tf)
-
-    neg_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in term_search(es_info['mapping']['tag'], ['Irrelevant'], self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)}
+    results = term_search(es_info['mapping']['tag'], ['Irrelevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    neg_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results["results"]}
     neg_urls = neg_data.keys();
     neg_text = neg_data.values();
 
-    neg_freq = {}
     total_neg_tf = None
     total_neg = 0
 
-    total_bigram_neg_tf = None
-    total_bigram_neg = 0
-
-    total_trigram_neg_tf = None
-    total_trigram_neg = 0
-
     neg_corpus = []
-    neg_bigram_corpus = []
-    neg_trigram_corpus = []
 
     if len(neg_urls) > 1:
-      [ttfs_neg,neg_corpus,_] = getTermFrequency(neg_urls, pos_tags=self._pos_tags, term_freq=MAX_TERM_FREQ, mapping=es_info['mapping'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
-
-      total_neg_tf = np.sum(ttfs_neg, axis=0)
+      tfidf_neg = tfidf_vectorizer(ngram_range=(1,3))
+      [_, total_neg_tf, neg_corpus] = tfidf_neg.tfidf(neg_text)
+      total_neg_tf = np.sum(total_neg_tf, axis=0)
       total_neg = np.sum(total_neg_tf)
-
-      [_,_,bigram_tf_data,trigram_tf_data,neg_bigram_corpus, neg_trigram_corpus,_,_] = get_bigrams_trigrams.get_bigrams_trigrams(neg_text, opt_maxNumberOfTerms, self._es)
-
-      total_bigram_neg_tf = np.transpose(np.sum(bigram_tf_data, axis=0))
-      total_bigram_neg = np.sum(total_bigram_neg_tf)
-
-      total_trigram_neg_tf = np.transpose(trigram_tf_data.sum(axis=0))
-      total_trigram_neg = np.sum(total_trigram_neg_tf)
+      total_neg_tf = total_neg_tf.flatten().tolist()[0]
 
     entry = {}
     for key in top_terms + [term for term in custom_terms if term in pos_corpus or term in neg_corpus]:
@@ -1068,52 +1086,6 @@ class DomainModel(object):
       else:
         entry[key].update({"tag": []})
 
-    for key in top_bigrams + [term for term in custom_terms if term in pos_bigram_corpus or term in neg_bigram_corpus]:
-      if key in pos_bigram_corpus:
-        if total_bigram_pos != 0:
-          entry[key] = {"pos_freq": (float(total_bigram_pos_tf[pos_bigram_corpus.index(key)])/total_bigram_pos)}
-        else:
-          entry[key] = {"pos_freq": 0}
-      else:
-        entry[key] = {"pos_freq": 0}
-      if key in neg_bigram_corpus:
-        if total_bigram_neg != 0:
-          entry[key].update({"neg_freq": (float(total_bigram_neg_tf[neg_bigram_corpus.index(key)])/total_bigram_neg)})
-        else:
-          entry[key].update({"neg_freq": 0})
-      else:
-        entry[key].update({"neg_freq": 0})
-
-      if key in pos_terms:
-        entry[key].update({"tag": ["Positive"]})
-      elif key in neg_terms:
-        entry[key].update({"tag": ["Negative"]})
-      else:
-        entry[key].update({"tag": []})
-
-    for key in top_trigrams + [term for term in custom_terms if term in pos_trigram_corpus or term in neg_trigram_corpus]:
-      if key in pos_trigram_corpus:
-        if total_trigram_pos != 0:
-          entry[key] = {"pos_freq": (float(total_trigram_pos_tf[0,pos_trigram_corpus.index(key)])/total_trigram_pos)}
-        else:
-          entry[key] = {"pos_freq": 0}
-      else:
-        entry[key] = {"pos_freq": 0}
-      if key in neg_trigram_corpus:
-        if total_trigram_neg != 0:
-          entry[key].update({"neg_freq": (float(total_trigram_neg_tf[neg_trigram_corpus.index(key)])/total_trigram_neg)})
-        else:
-          entry[key].update({"neg_freq": 0})
-      else:
-        entry[key].update({"neg_freq": 0})
-
-      if key in pos_terms:
-        entry[key].update({"tag": ["Positive"]})
-      elif key in neg_terms:
-        entry[key].update({"tag": ["Negative"]})
-      else:
-        entry[key].update({"tag": []})
-
     for key in custom_terms:
       if entry.get(key) == None:
         entry[key] = {"pos_freq":0, "neg_freq":0, "tag":["Custom"]}
@@ -1124,7 +1096,10 @@ class DomainModel(object):
       else:
         entry[key]["tag"].append("Custom")
 
-    terms = [[key, entry[key]["pos_freq"], entry[key]["neg_freq"], entry[key]["tag"]] for key in custom_terms + top_terms + top_bigrams + top_trigrams]
+        end = time.time()
+    print "Time to compute terms in pos and neg pages = ", end-start
+    
+    terms = [[key, entry[key]["pos_freq"], entry[key]["neg_freq"], entry[key]["tag"]] for key in custom_terms + top_terms] # + top_bigrams + top_trigrams
 
     return terms
 
@@ -1282,7 +1257,10 @@ class DomainModel(object):
     """
     es_info = self._esInfo(session['domainId'])
 
-    session['pagesCap'] = self._all
+    session['pagesCap'] = 12
+
+    if session.get('from') is None:
+      session['from'] = 0
 
     format = '%m/%d/%Y %H:%M %Z'
     if not session.get('fromDate') is None:
@@ -1291,28 +1269,22 @@ class DomainModel(object):
     if not session.get('toDate') is None:
       session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
 
-    hits = self._getPagesQuery(session)
+    results = self._getPagesQuery(session)
 
+    hits = results['results']
+
+    no_image_desc_ids = Set()
     docs = {}
     for hit in hits:
       doc = {}
       if not hit.get('description') is None:
         doc["snippet"] = " ".join(hit['description'][0].split(" ")[0:20])
+      else:
+        no_image_desc_ids.add(hit["id"])
       if not hit.get('image_url') is None:
         doc["image_url"] = hit['image_url'][0]
-      # else:
-      #   image_hit = get_documents_by_id([hit["id"]], ["html"], es_info['activeDomainIndex'], es_info['docType'], self._es)
-      #   if len(image_hit) > 0 and not image_hit[0].get('html') is None:
-      #     imageURL = getImage(image_hit[0]["html"][0], hit['url'][0])
-      #     entry = {
-      #       session['domainId']: {
-      #         "image_url": imageURL
-      #       }
-      #     }
-      #     update_document(entry, es_info['activeDomainIndex'],  es_info['docType'], self._es)
-      #     print "\n\n\n IMAGE URL ",imageURL, "\n\n\n"
-      #     doc["image_url"] = imageURL
-
+      else:
+        no_image_desc_ids.add(hit["id"])
       if not hit.get('title') is None:
         doc["title"] = hit['title'][0]
       if not hit.get(es_info['mapping']['tag']) is None:
@@ -1327,270 +1299,302 @@ class DomainModel(object):
       else:
         print "\n\n\n Could not find URL for ",hit["id"],"\n\n\n"
 
-    return docs
+    if len(no_image_desc_ids) > 0:
+
+      image_desc_hits = get_documents_by_id(list(no_image_desc_ids), ["url", "html", "text"], es_info['activeDomainIndex'], es_info['docType'], self._es)
+
+      for image_desc_hit in image_desc_hits:
+        if image_desc_hit.get('html') is not None:
+          imageURL = getImage(image_desc_hit["html"][0], image_desc_hit['url'][0])
+
+          if imageURL is not None:
+            docs[image_desc_hit['url'][0]]['image_url'] = imageURL
+
+          desc = getDescription(image_desc_hit["html"][0], image_desc_hit['text'][0])
+          if desc is not None:
+            docs[image_desc_hit['url'][0]]['snippet'] =  " ".join(desc.split(" ")[0:20])
+
+    return {'total': results['total'], 'results': docs}
 
   def _getMostRecentPages(self, session):
     es_info = self._esInfo(session['domainId'])
-    session['pagesCap'] = 50
+
     hits = []
-    if session['fromDate'] is None:
-      hits = get_most_recent_documents(session['pagesCap'], es_info['mapping'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+    if session['fromDate'] is None and session['filter'] is None:
+      hits = get_most_recent_documents(session['from'], session['pagesCap'],
+                                       es_info['mapping'],
+                                       ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                        session['filter'],
                                        es_info['activeDomainIndex'],
                                        es_info['docType'],
                                        self._es)
-    else:
-      if(session['filter'] is None):
-        hits = range_search(es_info['mapping']["timestamp"], session['fromDate'], session['toDate'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']['tag'], es_info['mapping']["timestamp"], es_info['mapping']["text"]], True, session['pagesCap'],
+    elif not session['fromDate'] is None and session['filter'] is None:
+        hits = range_search(es_info['mapping']["timestamp"], session['fromDate'], session['toDate'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']['tag'], es_info['mapping']["timestamp"], es_info['mapping']["text"]], True, session['from'], session['pagesCap'],
                             es_info['activeDomainIndex'],
                             es_info['docType'],
                             self._es)
-      else:
-        s_fields = {
-          es_info['mapping']["text"]: "(" + session['filter'].replace('"','\"') + ")",
-          es_info['mapping']["timestamp"]: "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
-        }
-        hits = multifield_query_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                       es_info['activeDomainIndex'],
-                                       es_info['docType'],
-                                       self._es)
+    elif not session['filter'] is None:
+        s_fields = {}
+        if not session['fromDate'] is None:
+          es_info['mapping']["timestamp"] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+        s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
+        hits = multifield_term_search(s_fields,
+                                      session['from'], session['pagesCap'],
+                                      ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                      es_info['activeDomainIndex'],
+                                      es_info['docType'],
+                                      self._es)
     return hits
-
-  def _getPagesForQueriesTags(self, session):
-    es_info = self._esInfo(session['domainId'])
-
-    s_fields = {}
-    s_fields_aux = {}
-    if not session['filter'] is None:
-      s_fields[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
-      s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
-
-    if not session['fromDate'] is None:
-      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
-      s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
-
-    hits=[]
-    n_criteries = session['newPageRetrievalCriteria'].split(',')
-    for criteria in n_criteries:
-        if criteria != "":
-            if criteria == "Queries":
-                queries = session['selected_queries'].split(',')
-            elif criteria == "Tags":
-                tags = session['selected_tags'].split(',')
-
-    for query in queries:
-        for tag in tags:
-            if tag != "":
-                if tag == "Neutral":
-                    s_fields["filter"] = {"missing" : { "field" : "tag" }}
-
-                else:
-                    s_fields[es_info['mapping']['tag']] = tag
-
-                s_fields[es_info['mapping']["query"]] = query
-
-                results = multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                            es_info['activeDomainIndex'],
-                                            es_info['docType'],
-                                            self._es)
-
-                if session['selected_morelike']=="moreLike":
-                    aux_result = self._getMoreLikePagesAll(session, results)
-                    hits.extend(aux_result)
-                else:
-                    hits.extend(results)
-
-                s_fields.pop("filter",None)
-                s_fields.pop("tag", None)
-
-    return hits
-
 
   def _getPagesForMultiCriteria(self, session):
     es_info = self._esInfo(session['domainId'])
-    s_fields_aux = {}
+
+    s_fields = {}
+    query = None
     if not session['filter'] is None:
-      s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
-
+      query = "(" + es_info['mapping']["text"] + ":" + session['filter'].replace('"','\"') + ") OR (" + \
+              es_info['mapping']["title"] + ":" + session['filter'].replace('"','\"') + ") OR (" + \
+              es_info['mapping']["domain"] + ":" + session['filter'].replace('"','\"') + ")"
+              
     if not session['fromDate'] is None:
-      s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
-    hits=[]
+    queries = []
+    for field, value in s_fields.items():
+      if query is None:
+        query = "(" + field + ":" + value + ")"
+      else:
+        query = query + " AND " + "(" + field + ":" + value + ")"
+        
+
     n_criteria = session['pageRetrievalCriteria'].keys()
     n_criteria_vals = [val.split(",") for val in session['pageRetrievalCriteria'].values()]
 
     criteria_comb = product(*[range(0,len(val)) for val in n_criteria_vals])
 
     for criteria in criteria_comb:
-      s_fields = s_fields_aux.copy()
       i = 0
+      filters = []
       for criterion_index in criteria:
         criterion = n_criteria_vals[i][criterion_index]
         n_criterion = n_criteria[i]
-        if n_criterion == 'tag' and criterion == "Neutral":
-          s_fields["filter"] = {
-            "missing" : { "field" : "tag" }
-          }
-        elif n_criterion == 'query':
-          if "Crawled Data" in criterion:
-            s_fields["filter"] = {
-              "missing" : { "field" : "query" }
-            }
-          else:
-            s_fields[es_info['mapping']["query"]] = criterion
+        if n_criterion == es_info['mapping']["tag"] and criterion == "Neutral":
+          filters.append({"missing" : { "field" : es_info['mapping']["tag"] }})
+        elif n_criterion == es_info['mapping']["query"] and "Crawled Data" in criterion:
+          filters.append({"missing" : { "field" : es_info['mapping']["query"] }})
         elif n_criterion == 'model_tag':
           if criterion in 'Maybe relevant':
-            s_fields["label_neg"] =  1
+            filters.append({"term":{"label_pos": 1}})
           elif criterion in 'Maybe irrelevant':
-            s_fields["label_pos"] =  1
+            filters.append({"term":{"label_neg": 1}})
           elif criterion in 'Unsure':
-            s_fields["unsure_tag"] =  1
+            filters.append({"term":{"unsure_tag": 1}})
+        elif n_criterion == 'crawled_tag':
+          if criterion == "CD Relevant":
+            filters.append({"term":{"isRelevant":"relevant"}})
+          elif criterion == "CD Irrelevant":
+            filters.append({"term":{"isRelevant":"irrelevant"}})
         else:
-          s_fields[n_criterion] =  criterion
+          filters.append({"term":{n_criterion: criterion}})
         i = i+1
-      results= multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                      es_info['activeDomainIndex'],
-                                      es_info['docType'],
-                                      self._es)
 
-      if session['selected_morelike']=="moreLike":
-        morelike_result = self._getMoreLikePagesAll(session, results)
-        hits.extend(morelike_result)
-      else:
-        hits.extend(results)
+      filtered = {}
+      if not query is None:
+        filtered["query"]={"query_string":{"query": query}}
+      if len(filters) > 0:  
+        filtered["filter"] = {"and":filters}
 
-    return hits
+      if len(filtered) > 0:
+        queries.append({"filtered":filtered})
 
+    query = {}
+    if len(queries) > 0:
+      query["query"] =  {
+        "bool": {
+          "should": queries,
+          "minimum_number_should_match": 1
+        }
+      }
+
+    results = exec_query(query,
+                         ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                         session['from'], session['pagesCap'], 
+                         es_info['activeDomainIndex'],
+                         es_info['docType'],
+                         self._es)
+
+    # if session['selected_morelike']=="moreLike":
+    #   morelike_result = self._getMoreLikePagesAll(session, results['results'])
+    #   hits['results'].extend(morelike_result)
+    # else:
+    #   hits.extend(results)
+
+    return results
 
   def _getPagesForQueries(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    s_fields_aux = {}
+    s_fields = {}
     if not session['filter'] is None:
-      s_fields_aux[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
+      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
 
     if not session['fromDate'] is None:
-      s_fields_aux[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
-    hits=[]
     queries = session['selected_queries'].split(',')
 
+    filters = []
     for query in queries:
-      s_fields = s_fields_aux.copy()
-      if "Crawled Data" in query:
-        s_fields["filter"] = {
-          "missing" : { "field" : "query" }
-        }
-      else:
-        s_fields[es_info['mapping']["query"]] = query
+      filters.append({"term":{es_info["mapping"]["query"]:query}})
 
-      results= multifield_term_search(s_fields,
-                                       session['pagesCap'],
-                                       ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
-                                       es_info['activeDomainIndex'],
-                                       es_info['docType'],
-                                       self._es)
-      if session['selected_morelike']=="moreLike":
-        aux_result = self._getMoreLikePagesAll(session, results)
-        hits.extend(aux_result)
-      else:
-        hits.extend(results)
-    return hits
+    if len(filters) > 0:
+      s_fields["filter"] = {"or":filters}
+
+    results= multifield_term_search(s_fields,
+                                    session['from'],
+                                    session['pagesCap'],
+                                    ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
+                                    es_info['activeDomainIndex'],
+                                    es_info['docType'],
+                                    self._es)
+
+    #TODO: Revisit when allowing selected_morelike
+    # if session['selected_morelike']=="moreLike":
+    #   aux_result = self._getMoreLikePagesAll(session, results)
+    #   hits.extend(aux_result)
+    # else:
+    #   hits.extend(results)
+
+    return results
 
   def _getPagesForTLDs(self, session):
     es_info = self._esInfo(session['domainId'])
 
     s_fields = {}
     if not session['filter'] is None:
-      s_fields[es_info['mapping']["text"]] =   session['filter'].replace('"','\"')
+      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
 
     if not session['fromDate'] is None:
       s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
-    hits=[]
+    filters=[]
     tlds = session['selected_tlds'].split(',')
 
     for tld in tlds:
-      s_fields[es_info['mapping']['domain']] = '"' + tld + '"'
-      results= multifield_query_search(s_fields,
+      filters.append({"term": {es_info['mapping']['domain']:tld}})
+
+    if len(filters) > 0:
+      s_fields["filter"] = {"or":filters}
+
+    results= multifield_term_search(s_fields,
+                                       session['from'],
                                        session['pagesCap'],
                                        ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
                                        es_info['activeDomainIndex'],
                                        es_info['docType'],
                                        self._es)
-      if session['selected_morelike']=="moreLike":
-        aux_result = self._getMoreLikePagesAll(session, results)
-        hits.extend(aux_result)
-      else:
-        hits.extend(results)
-    return hits
+      # if session['selected_morelike']=="moreLike":
+      #   aux_result = self._getMoreLikePagesAll(session, results)
+      #   hits.extend(aux_result)
+      # else:
+      #   hits.extend(results)
+
+    return results
 
   def _getPagesForTags(self, session):
     es_info = self._esInfo(session['domainId'])
 
     s_fields = {}
     if not session['filter'] is None:
-      s_fields[es_info['mapping']["text"]] = session['filter'].replace('"','\"')
+      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
 
     if not session['fromDate'] is None:
       s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
-    hits=[]
+    filters=[]
     tags = session['selected_tags'].split(',')
+
     for tag in tags:
       if tag != "":
         if tag == "Neutral":
-          s_fields["filter"] = {
-            "missing" : { "field" : "tag" }
-          }
-
-          results = multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                           es_info['activeDomainIndex'],
-                                           es_info['docType'],
-                                           self._es)
-
-          if session['selected_morelike']=="moreLike":
-            aux_result = self._getMoreLikePagesAll(session, results)
-            hits.extend(aux_result)
-          else:
-            hits.extend(results)
-          s_fields.pop("filter")
-
-          s_fields["tag"] = ""
-
-          results = multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                           es_info['activeDomainIndex'],
-                                           es_info['docType'],
-                                           self._es)
-
-          if session['selected_morelike']=="moreLike":
-              aux_result = self._getMoreLikePagesAll(session, results)
-              hits.extend(aux_result)
-          else:
-              hits.extend(results)
-          s_fields.pop("tag")
+          filters.append({"missing" : { "field" : es_info["mapping"]["tag"]}})
+          filters.append({"term":{es_info["mapping"]["tag"]:""}})
         else:
-          #Added a wildcard query as tag is not analyzed field
-          query = {
-            "wildcard": {es_info['mapping']["tag"]:"*" + tag + "*"}
-          }
-          s_fields["queries"] = [query]
-          results= multifield_term_search(s_fields, session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                          es_info['activeDomainIndex'],
-                                          es_info['docType'],
-                                          self._es)
-          if session['selected_morelike']=="moreLike":
-              aux_result = self._getMoreLikePagesAll(session, results)
-              hits.extend(aux_result)
-          else:
-              hits.extend(results)
-          s_fields.pop("queries");
-    return hits
+          filters.append({"term":{es_info["mapping"]["tag"]:tag}})
+
+    #filters.append({"wildcard": {es_info['mapping']["tag"]:"*" + tag + "*"}})
+
+    if len(filters) > 0:
+      s_fields["filter"] = {"or":filters}
+
+    results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                     es_info['activeDomainIndex'],
+                                    es_info['docType'],
+                                     self._es)
+
+    return results
+
+  def _getPagesForCrawledTags(self, session):
+    es_info = self._esInfo(session['domainId'])
+
+    s_fields = {}
+    if not session['filter'] is None:
+      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]      
+
+    if not session['fromDate'] is None:
+      s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+
+    filters=[]
+    tags = session['selected_crawled_tags'].split(',')
+
+    for tag in tags:
+      if tag == "CD Relevant":
+        filters.append({"term":{"isRelevant":"relevant"}})
+      elif tag == "CD Irrelevant":
+        filters.append({"term":{"isRelevant":"irrelevant"}})
+
+    if len(filters) > 0:
+      s_fields["filter"] = {"or":filters}
+
+    results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                     es_info['activeDomainIndex'],
+                                    es_info['docType'],
+                                     self._es)
+
+    return results
+
+  def _getPagesForModelTags(self, session):
+    es_info = self._esInfo(session['domainId'])
+
+    s_fields = {}
+    if not session['filter'] is None:
+      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]      
+
+    filters=[]
+    tags = session['selected_model_tags'].split(',')
+
+    for tag in tags:
+      if tag == "Unsure":
+        filters.append({"term":{"unsure_tag":1}})
+      elif tag == "Maybe relevant":
+        filters.append({"term":{"label_pos":1}})
+      elif tag == "Maybe irrelevant":
+        filters.append({"term":{"label_neg":1}})
+
+    if len(filters) > 0:
+      s_fields["filter"] = {"or":filters}
+
+    results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                     es_info['activeDomainIndex'],
+                                    es_info['docType'],
+                                     self._es)
+
+    return results
 
   def _getRelevantPages(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    pos_hits = search(es_info['mapping']['tag'], ['relevant'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], 'page', self._es)
+    pos_hits = search(es_info['mapping']['tag'], ['relevant'], session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], 'page', self._es)
 
     return pos_hits
 
@@ -1600,12 +1604,12 @@ class DomainModel(object):
     hits=[]
     tags = session['selected_tags'].split(',')
     for tag in tags:
-      tag_hits = search(es_info['mapping']['tag'], [tag], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], 'page', self._es)
+      tag_hits = search(es_info['mapping']['tag'], [tag], session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], 'page', self._es)
 
       if len(tag_hits) > 0:
         tag_urls = [field['id'] for field in tag_hits]
 
-        results = get_more_like_this(tag_urls, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], session['pagesCap'],  es_info['activeDomainIndex'], es_info['docType'],  self._es)
+        results = get_more_like_this(tag_urls, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], session['from'], session['from'], session['pagesCap'],  es_info['activeDomainIndex'], es_info['docType'],  self._es)
 
         hits.extend(tag_hits[0:self._pagesCapTerms] + results)
 
@@ -1620,23 +1624,24 @@ class DomainModel(object):
       else: aux_result=tag_hits
       return aux_result
 
+
   def _getUnsureLabelPages(self, session):
     es_info = self._esInfo(session['domainId'])
-    unsure_label_hits = term_search("unsure_tag", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    unsure_label_hits = term_search("unsure_tag", "1", session['from'], session["pagesCap"], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return unsure_label_hits
 
   def _getPosLabelPages(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    pos_label_hits = term_search("label_pos", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    pos_label_hits = term_search("label_pos", "1", session['from'], session["pagesCap"], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return pos_label_hits
 
   def _getNegLabelPages(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    neg_label_hits = term_search("label_neg", "1", MAX_LABEL_PAGES, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    neg_label_hits = term_search("label_neg", "1", session['from'], session["pagesCap"], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return neg_label_hits
 
@@ -1665,12 +1670,9 @@ class DomainModel(object):
     elif (session.get('pageRetrievalCriteria') == 'Tags'):
       hits = self._getPagesForTags(session)
     elif (session.get('pageRetrievalCriteria') == 'Model Tags'):
-      if session['selected_model_tags'] == 'Unsure':
-        hits = self._getUnsureLabelPages(session)
-      elif (session.get('selected_model_tags') == 'Maybe relevant'):
-        hits = self._getPosLabelPages(session)
-      elif (session.get('selected_model_tags') == 'Maybe irrelevant'):
-        hits = self._getNegLabelPages(session)
+      hits = self._getPagesForModelTags(session)
+    elif (session.get('pageRetrievalCriteria') == 'Crawled Tags'):
+      hits = self._getPagesForCrawledTags(session)
 
     return hits
 
@@ -1734,10 +1736,16 @@ class DomainModel(object):
         "wildcard": {es_info['mapping']["tag"]:tag}
       }
       s_fields["queries"] = [query]
-      pos_docs = pos_docs + multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
-                                                   es_info['activeDomainIndex'],
-                                                   es_info['docType'],
-                                                   self._es)
+
+      results = multifield_term_search(s_fields,
+                                       0, self._all,
+                                       ["url", es_info['mapping']['html']],
+                                       es_info['activeDomainIndex'],
+                                       es_info['docType'],
+                                       self._es)
+      
+      pos_docs = pos_docs + results['results']
+      
     neg_docs = []
     for tag in neg_tags.split(','):
       s_fields = {}
@@ -1745,10 +1753,13 @@ class DomainModel(object):
         "wildcard": {es_info['mapping']["tag"]:tag}
       }
       s_fields["queries"] = [query]
-      neg_docs = neg_docs + multifield_term_search(s_fields, self._all, ["url", es_info['mapping']['html']],
-                                                   es_info['activeDomainIndex'],
-                                                   es_info['docType'],
-                                                   self._es)
+      results = multifield_term_search(s_fields,
+                                       0, self._all,
+                                       ["url", es_info['mapping']['html']],
+                                       es_info['activeDomainIndex'],
+                                       es_info['docType'],
+                                       self._es)
+      neg_docs = neg_docs + results['results']
 
     pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
     neg_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in neg_docs}
@@ -1842,7 +1853,7 @@ class DomainModel(object):
   def updateOnlineClassifier(self, session):
     domainId = session['domainId']
     es_info = self._esInfo(domainId)
-    
+
     onlineClassifier = None
     trainedPosSamples = []
     trainedNegSamples = []
@@ -1879,10 +1890,12 @@ class DomainModel(object):
       }
     }
 
-    pos_docs = exec_query(query, ["url", es_info['mapping']['text']], self._all,
+    results = exec_query(query, ["url", es_info['mapping']['text']],
+                          0, self._all,
                           es_info['activeDomainIndex'],
                           es_info['docType'],
                           self._es)
+    pos_docs = results["results"]
 
     pos_text = [pos_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for pos_doc in pos_docs]
     pos_ids = [pos_doc["id"] for pos_doc in pos_docs]
@@ -1906,10 +1919,14 @@ class DomainModel(object):
         }
       }
     }
-    neg_docs = exec_query(query, ["url", es_info['mapping']['text']], self._all,
+    results = exec_query(query, ["url", es_info['mapping']['text']],
+                          0, self._all,
                           es_info['activeDomainIndex'],
                           es_info['docType'],
                           self._es)
+
+    neg_docs = results["results"]
+    
     neg_text = [neg_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for neg_doc in neg_docs]
     neg_ids = [neg_doc["id"] for neg_doc in neg_docs]
     neg_labels = [0 for i in range(0, len(neg_text))]
@@ -2106,6 +2123,8 @@ class DomainModel(object):
         pos_indices = np.nonzero(classp)
         neg_indices = np.where(classp == 0)
 
+    return {"Unsure": unsure, "Maybe relevant": label_pos, "Maybe irrelevant": label_neg}
+
 #######################################################################################################
 # Run Crawler
 #######################################################################################################
@@ -2122,36 +2141,30 @@ class DomainModel(object):
     """
 
     domainId = session['domainId']
-    
+
     if self.runningCrawlers.get(domainId) is not None:
-      return self.runningCrawlers[domainId]['message']
-    
+      return self.runningCrawlers[domainId]['status']
+
     if len(self.runningCrawlers.keys()) == 0:
       es_info = self._esInfo(domainId)
-      
+
       data_dir = self._path + "/data/"
       data_domain  = data_dir + es_info['activeDomainIndex']
       domainmodel_dir = data_domain + "/models/"
       domainoutput_dir = data_domain + "/output/"
-      
+
       if (not isdir(domainmodel_dir)):
         self.createModel(session, False)
       if (not isdir(domainmodel_dir)):
         return "No domain model available"
-      
+
       ache_home = environ['ACHE_HOME']
-      print "\n\n\n",ache_home,"\n\n\n"
       comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt"
       p = Popen(shlex.split(comm))
-      self.runningCrawlers[domainId] = {'process': p}
-      #output, errors = p.communicate()
-      # print output
-      # print errors
-      
-      self.runningCrawlers[domainId]['message'] = "Crawler is running"
-      
-      return "Crawler is running"
-    return "Crawler running for domain: " + self._domains[self.runningCrawlers.keys()[0]]['domain_name']
+      self.runningCrawlers[domainId] = {'process': p, 'domain': self._domains[domainId]['domain_name'], 'status': "Running" }
+
+      return "Running"
+    return "Running in domain: " + self._domains[self.runningCrawlers.keys()[0]]['domain_name']
 
   def stopCrawler(self, session):
     """ Stop the ACHE crawler for the specfied domain with the domain model. The
@@ -2165,19 +2178,19 @@ class DomainModel(object):
     """
 
     domainId = session['domainId']
-    
+
     p = self.runningCrawlers[domainId]['process']
 
     p.terminate()
 
-    print "\n\n\nSHUTTING DOWN\n\n\n"
+    print "\n\n\nCrawler Shutting Down\n\n\n"
 
-    self.runningCrawlers[domainId]['message'] = "Crawler shutting down"
-    
+    self.runningCrawlers[domainId]['status'] = "Terminating"
+
     p.wait()
 
     self.runningCrawlers.pop(domainId)
-    
+
     print "\n\n\nCrawler Stopped\n\n\n"
     return "Crawler Stopped"
 

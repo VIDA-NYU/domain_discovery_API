@@ -1,0 +1,13 @@
+Go to https://azure.microsoft.com/try/cognitive-services/?api=bing-web-search-api
+Get Search APIs v7
+old key:
+aea51ea61e2c4c2685bebd0e916a6266
+2906061973594ef684f932436c69f45d
+
+new key:
+0df6b810cd3c4f7f8b4ec3432126477f
+c7242ddb77a541ebb9900d560f896aff
+
+
+Search Endpoint:
+https://api.cognitive.microsoft.com/bing/v7.0/search

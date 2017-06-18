@@ -1,0 +1,11 @@
+name: dd_api
+
+channels:
+  - memex
+  - anaconda
+  - vida-nyu
+  
+dependencies:
+    - ddt-word2vec
+    - maven
+    - openjdk
