@@ -1275,6 +1275,7 @@ class DomainModel(object):
 
     no_image_desc_ids = Set()
     docs = {}
+    order = 0
     for hit in hits:
       doc = {}
       if not hit.get('description') is None:
@@ -1292,8 +1293,12 @@ class DomainModel(object):
       if not hit.get("rank") is None:
         doc["rank"] = hit["rank"]
       if not hit.get(es_info['mapping']["timestamp"]) is None:
-        doc["timestamp"] = hit[es_info['mapping']["timestamp"]]
+        doc["timestamp"] = hit[es_info['mapping']["timestamp"]][0]
 
+      # To maintain order on the client  
+      doc["order"] = order
+      order = order + 1
+      
       if(not hit.get('url') is None):
         docs[hit['url'][0]] = doc
       else:
