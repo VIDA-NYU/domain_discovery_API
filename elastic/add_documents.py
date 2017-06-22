@@ -21,7 +21,7 @@ def add_document(entries, es_index='memex', es_doc_type='page', es=None):
 
         es_entries.append(entry)    
 
-    helpers.bulk(es, es_entries, refresh=True)
+    helpers.bulk(es, es_entries, refresh=True, request_timeout=60)
 
 def update_document(update_entries, es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -32,7 +32,7 @@ def update_document(update_entries, es_index='memex', es_doc_type='page', es=Non
                        "_type": es_doc_type,
                        "doc": value,
                        "doc_as_upsert": True,
-                       "_id": key} for key, value in update_entries.items()], refresh=True, request_timeout=600)
+                       "_id": key} for key, value in update_entries.items()], refresh=True, request_timeout=60)
 
 def delete_document(delete_entries, es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -41,7 +41,7 @@ def delete_document(delete_entries, es_index='memex', es_doc_type='page', es=Non
     helpers.bulk(es, [{"_op_type": "delete",
                        "_index": es_index,
                        "_type": es_doc_type,
-                       "_id": key} for key in delete_entries], refresh=True, request_timeout=600)
+                       "_id": key} for key in delete_entries], refresh=True, request_timeout=60)
 
 def refresh(es_index='memex', es_doc_type='page', es=None):
     if es is None:
