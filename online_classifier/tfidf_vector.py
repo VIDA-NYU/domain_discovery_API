@@ -35,7 +35,6 @@ class tfidf_vectorizer(tf_vectorizer):
 
     def getTopTerms(self,top):
         N = len(self.data)
-        avg = np.divide(np.sum(self.tfidfArray, axis=0), N)
-        reshape = np.shape(avg)[1]
-        sortedAvgIndices = np.array(np.argsort(avg)[::-1]).reshape(reshape)
+        avg = np.sum(self.tfidfArray, axis=0)
+        sortedAvgIndices = np.argsort(np.array(avg)[0])[::-1]
         return [self.corpus[i] for i in sortedAvgIndices[0:top]]
