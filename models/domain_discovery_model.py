@@ -988,7 +988,7 @@ class DomainModel(object):
     if len(url_ids) > 0 and text:
 
       start = time.time()
-      tfidf_v = tfidf_vectorizer(max_features=opt_maxNumberOfTerms+len(neg_terms), ngram_range=(1,3))
+      tfidf_v = tfidf_vectorizer(ngram_range=(1,3))
       tfidf_v.tfidf(text)
       if pos_terms:
         extract_terms_all = extract_terms.extract_terms(tfidf_v)
