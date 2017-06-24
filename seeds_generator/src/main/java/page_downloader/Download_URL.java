@@ -52,7 +52,8 @@ public class Download_URL implements Runnable {
     String description = "";
     String title = "";
     String query = "";
-    String subquery = null;    
+    String subquery = null;
+    ArrayList<String> tag = null;
     String rank = "0";
     String es_index = "memex";
     String es_doc_type = "page";
@@ -60,7 +61,7 @@ public class Download_URL implements Runnable {
     Client client = null;
     Integer timeout = 5; 
 	
-    public Download_URL(JSONObject url_info, String query, String subquery, String es_index, String es_doc_type, Client client){
+    public Download_URL(JSONObject url_info, String query, String subquery, ArrayList<String> tag, String es_index, String es_doc_type, Client client){
 	try{
 	    this.url = (String)url_info.get("link");
 	}catch(JSONException e){
@@ -75,7 +76,8 @@ public class Download_URL implements Runnable {
 	    this.rank = (String)url_info.get("rank");
 	
 	this.query = query;
-	this.subquery = subquery;	
+	this.subquery = subquery;
+	this.tag = tag;
 	this.client = client;
 	if(!es_index.isEmpty())
 	    this.es_index = es_index;
@@ -243,6 +245,9 @@ public class Download_URL implements Runnable {
 			    .field("image_url", new URI(imageUrl))
 			    .field("description", description)
 			    .field("rank", this.rank);
+
+			if(tag !=null && !tag.isEmpty())
+			    jobj.field("tag", this.tag);
 
 			SearchHit[] hits = searchResponse.getHits().getHits();
 			for (SearchHit hit : searchResponse.getHits()) {

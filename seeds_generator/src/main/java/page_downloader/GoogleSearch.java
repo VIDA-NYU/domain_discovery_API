@@ -48,8 +48,10 @@ public class GoogleSearch {
 	    return null;
 
 	}
-
-	Download download = new Download(query, null, es_index, es_doc_type, es_server);
+	String subquery = null;
+	ArrayList<String> tag = null;
+	
+	Download download = new Download(query, subquery, tag, es_index, es_doc_type, es_server);
 
 	ArrayList<String> urls = new ArrayList<String>();
 

@@ -1,11 +1,13 @@
 import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 public class Download_urls {
     public Download_urls(){
     }
     
-    public void download(String[] urls, String query, String subquery, String es_index, String es_doc_type, String es_server){
-	Download download = new Download(query, subquery, es_index, es_doc_type, es_server);
+    public void download(String[] urls, String query, String subquery, ArrayList<String>  tag, String es_index, String es_doc_type, String es_server){
+	Download download = new Download(query, subquery, tag, es_index, es_doc_type, es_server);
 	
 	for(String url: urls){
 	    JSONObject url_info = new JSONObject();
@@ -26,6 +28,7 @@ public class Download_urls {
 	String es_server = "localhost";
 	String query = "uploaded";
 	String subquery = null;
+	String tag = "";
 	
 	int i = 0;
 	while (i < args.length){
@@ -40,6 +43,8 @@ public class Download_urls {
 		es_server = args[++i];
 	    } else if(arg.equals("-q")){
 		query = args[++i];
+	    } else if(arg.equals("-t")){
+		tag = args[++i];
 	    } else if(arg.equals("-sq")){
 		subquery = args[++i];
 	    }else {
@@ -52,8 +57,14 @@ public class Download_urls {
 	String[] urls = null;
 	if(urls_str != null & !urls_str.isEmpty())
 	    urls = urls_str.split(" ");
-		
+	
+	ArrayList<String> tags = new ArrayList<String>();
+	String[] tmp_tags = tag.split(",");
+	for(i=0;i < tmp_tags.length;++i){
+	    tags.add(tmp_tags[i]);
+	}
+	
 	Download_urls download_urls = new Download_urls();
-	download_urls.download(urls, query, subquery, es_index, es_doc_type, es_server);
+	download_urls.download(urls, query, subquery, tags, es_index, es_doc_type, es_server);
     }
 }

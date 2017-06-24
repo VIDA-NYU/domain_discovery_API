@@ -331,10 +331,10 @@ class Page(object):
   
   # Download the pages of uploaded urls
   @cherrypy.expose
-  def uploadUrls(self, urls, session):
+  def uploadUrls(self, urls, tag, session):
     urls = urls.replace("\n", " ")
     session = json.loads(session)
-    res = self._model.uploadUrls(urls, session)
+    res = self._model.uploadUrls(urls, tag, session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps({"status": "Done"})
 

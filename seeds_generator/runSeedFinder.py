@@ -63,7 +63,7 @@ class CollectSeeds:
                         updateStatusCB(self.query, "status", "Downloading")
                         
                         # Download urls for a specific subquery
-                        callDownloadUrls("seedfinder:"+self.query, curr_subquery, " ".join(urls), self.es_info)
+                        callDownloadUrls("seedfinder:"+self.query, curr_subquery, " ".join(urls), "", self.es_info)
                         
                     curr_subquery = subquery
                     urls = [url]
@@ -75,7 +75,7 @@ class CollectSeeds:
                 updateStatusCB(self.query, "status", "Downloading")
                 
                 # Download urls for a specific subquery
-                callDownloadUrls("seedfinder:"+self.query, curr_subquery, " ".join(urls), self.es_info)
+                callDownloadUrls("seedfinder:"+self.query, curr_subquery, " ".join(urls), "", self.es_info)
 
         if count == 0:
             updateStatusCB(self.query, "status", "No relevant results")

@@ -58,7 +58,10 @@ public class BingSearch {
         int nTop = Integer.valueOf(top);
 	int nStart = Integer.valueOf(start);
 
-	Download download = new Download(query, null, es_index, es_doc_type, es_server);
+	String subquery = null;
+	ArrayList<String> tag = null;
+
+	Download download = new Download(query, subquery, tag, es_index, es_doc_type, es_server);
 	ArrayList<String> results = new ArrayList<String>();
 	    
 	try {

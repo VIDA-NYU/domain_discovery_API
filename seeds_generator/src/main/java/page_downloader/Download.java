@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.io.FileReader;
@@ -13,15 +14,17 @@ public class Download {
 
     private String query = "";
     private String subquery = null;
+    private ArrayList<String> tag = null;
     private String es_index = "memex";
     private String es_doc_type = "page";
     private Client client = null;
     private int poolSize = 100;
     private ExecutorService downloaderService = Executors.newFixedThreadPool(poolSize);
 
-    public Download(String query, String subquery, String es_index, String es_doc_type, String es_host){
+    public Download(String query, String subquery, ArrayList<String> tag, String es_index, String es_doc_type, String es_host){
 	this.query = query;
 	this.subquery = subquery;
+	this.tag = tag;
 	
 	if(es_host.isEmpty())
 	    es_host = "localhost";
@@ -48,7 +51,7 @@ public class Download {
     }
 
     public void addTask(JSONObject url_info){
-	downloaderService.execute(new Download_URL(url_info, this.query, this.subquery, this.es_index, this.es_doc_type, this.client));
+	downloaderService.execute(new Download_URL(url_info, this.query, this.subquery, this.tag, this.es_index, this.es_doc_type, this.client));
     }
 
     public void shutdown(){

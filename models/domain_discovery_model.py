@@ -215,7 +215,14 @@ class DomainModel(object):
 
     """
     es_info = self._esInfo(session['domainId'])
-    return get_unique_values('domain', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+
+    unique_tlds = {}
+
+    for k, v in get_unique_values('domain', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+      if "." in k:
+        unique_tlds[k] = v
+    
+    return unique_tlds
 
   def getAvailableQueries(self, session):
     """ Return all queries for the selected domain.
@@ -583,7 +590,7 @@ class DomainModel(object):
     n = int(n_pages.split(":")[1])
     return n
 
-  def uploadUrls(self, urls_str, session):
+  def uploadUrls(self, urls_str, tag, session):
     """ Download pages corresponding to already known set of domain URLs
 
     Parameters:
@@ -596,7 +603,7 @@ class DomainModel(object):
     """
     es_info = self._esInfo(session['domainId'])
 
-    output = callDownloadUrls("uploaded", None, urls_str, es_info)
+    output = callDownloadUrls("uploaded", None, urls_str, tag, es_info)
 
     return output
 

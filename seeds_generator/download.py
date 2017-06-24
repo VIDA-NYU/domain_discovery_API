@@ -51,7 +51,7 @@ def download(inputfile, es_index = "memex", es_doc_type = "page", es_host="http:
   #   print '*' * 80, '\n\n\n'  
   #   print errors
 
-def callDownloadUrls(query, subquery, urls_str, es_info):
+def callDownloadUrls(query, subquery, urls_str, tag, es_info):
 
   chdir(environ['DD_API_HOME']+'/seeds_generator')
   
@@ -68,6 +68,9 @@ def callDownloadUrls(query, subquery, urls_str, es_info):
              " -i " + es_info['activeDomainIndex'] + \
              " -d " + es_info['docType'] + \
              " -s " + es_server
+
+      if tag != "":
+        comm = comm + " -t " + tag
       
       if subquery is not None:
         comm = comm + " -sq \"" + subquery + "\""
@@ -82,7 +85,10 @@ def callDownloadUrls(query, subquery, urls_str, es_info):
            " -i " + es_info['activeDomainIndex'] + \
            " -d " + es_info['docType'] + \
            " -s " + es_server
-    
+
+    if tag != "":
+      comm = comm + " -t " + tag
+
     if subquery is not None:
       comm = comm + " -sq \"" + subquery + "\""
 
