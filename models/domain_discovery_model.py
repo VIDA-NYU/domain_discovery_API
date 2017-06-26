@@ -562,14 +562,14 @@ class DomainModel(object):
 
     if 'GOOG' in session['search_engine']:
       comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -t ' + str(top) + \
-             ' -q "' + terms.replace('"','\\"')  + '"' + \
+             ' -q \'' + terms + '\'' + \
              ' -i ' + es_info['activeDomainIndex'] + \
              ' -d ' + es_info['docType'] + \
              ' -s ' + es_server
 
     elif 'BING' in session['search_engine']:
       comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar BingSearch -t ' + str(top) + \
-             ' -q "' + terms.replace('"','\\"') + '"' + \
+             ' -q \'' + terms + '\'' + \
              ' -i ' + es_info['activeDomainIndex'] + \
              ' -d ' + es_info['docType'] + \
              ' -s ' + es_server

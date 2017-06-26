@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import org.json.JSONObject;
 import org.json.JSONArray;
 import org.json.JSONString;
-
+import java.net.URLEncoder;
 
 public class GoogleSearch {
 
@@ -58,7 +58,8 @@ public class GoogleSearch {
 	URL query_url;
 	try {
 	    int step = 10; //10 is the maximum number of results to return in each query
-	    query = "&num=" + String.valueOf(step) + "&key=" + accountKey + "&cx=" + cseID + "&q=" + query.replaceAll(" ", "%20");
+	    String encoded_query = URLEncoder.encode(query, "UTF-8");
+	    query = "&num=" + String.valueOf(step) + "&key=" + accountKey + "&cx=" + cseID + "&q=" + encoded_query;
 	    for (; start < nTop; start += step){
 
 		long startTime = System.currentTimeMillis();
