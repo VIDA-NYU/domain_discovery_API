@@ -1278,7 +1278,10 @@ class DomainModel(object):
 
     results = self._getPagesQuery(session)
 
-    hits = results['results']
+    hits = results.get('results')
+
+    if hits is None:
+      return {'total': 0, 'results': {}}
 
     no_image_desc_ids = Set()
     docs = {}
@@ -1395,12 +1398,13 @@ class DomainModel(object):
         elif n_criterion == es_info['mapping']["query"] and "Crawled Data" in criterion:
           filters.append({"missing" : { "field" : es_info['mapping']["query"] }})
         elif n_criterion == 'model_tag':
-          if criterion in 'Maybe relevant':
-            filters.append({"term":{"label_pos": 1}})
-          elif criterion in 'Maybe irrelevant':
-            filters.append({"term":{"label_neg": 1}})
-          elif criterion in 'Unsure':
-            filters.append({"term":{"unsure_tag": 1}})
+          model_tags = self._onlineClassifiers[session['domainId']].get('model_tags')
+          if not model_tags is None:
+            model_tag_filters = []
+            for url, tag in model_tags.items():
+              if tag in criterion:
+                model_tag_filters.append({"term":{"url":url}})
+            filters.append({"or":model_tag_filters})
         elif n_criterion == 'crawled_tag':
           if criterion == "CD Relevant":
             filters.append({"term":{"isRelevant":"relevant"}})
@@ -1578,6 +1582,10 @@ class DomainModel(object):
   def _getPagesForModelTags(self, session):
     es_info = self._esInfo(session['domainId'])
 
+    model_tags = self._onlineClassifiers[session['domainId']].get('model_tags')
+    if model_tags is None:
+      return {'total':0, 'results':[]}
+
     s_fields = {}
     if not session['filter'] is None:
       s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]      
@@ -1585,20 +1593,16 @@ class DomainModel(object):
     filters=[]
     tags = session['selected_model_tags'].split(',')
 
-    for tag in tags:
-      if tag == "Unsure":
-        filters.append({"term":{"unsure_tag":1}})
-      elif tag == "Maybe relevant":
-        filters.append({"term":{"label_pos":1}})
-      elif tag == "Maybe irrelevant":
-        filters.append({"term":{"label_neg":1}})
+    for url, tag in model_tags.items():
+      if tag in tags:
+        filters.append({"term":{"url":url}})
 
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
 
     results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                      es_info['activeDomainIndex'],
-                                    es_info['docType'],
+                                     es_info['docType'],
                                      self._es)
 
     return results
@@ -2046,9 +2050,8 @@ class DomainModel(object):
     unsure = 0
     label_pos = 0
     label_neg = 0
-    unlabeled_urls = []
 
-    MAX_SAMPLE = 500
+    MAX_SAMPLE = 300
 
     if self._onlineClassifiers.get(session['domainId']) == None:
       return
@@ -2070,13 +2073,11 @@ class DomainModel(object):
                                             es_info['docType'],
                                             self._es)
 
-      unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['text']) is not None]
+      unlabelled_docs = [unlabelled_doc for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['text']) is not None]
+      unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
       # Check if unlabeled data available
       if len(unlabeled_text) > 0:
-        unlabeled_urls = [unlabelled_doc[es_info['mapping']['url']][0] for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['url']) is not None]
-        unlabeled_ids = [unlabelled_doc["id"] for unlabelled_doc in unlabelled_docs]
-
         [unlabeled_data,_] =  self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(unlabeled_text)
         [classp, calibp, cm] = self._onlineClassifiers[session['domainId']]["onlineClassifier"].predictClass(unlabeled_data,sigmoid)
 
@@ -2089,51 +2090,24 @@ class DomainModel(object):
         pos_sorted_cm = pos_calib_indices[0][np.asarray(np.argsort(pos_cm)[::-1])]
         neg_sorted_cm = neg_calib_indices[0][np.asarray(np.argsort(neg_cm)[::-1])]
 
-        entries = {}
+        model_tags = {}
         for i in pos_sorted_cm:
-          entry = {}
           if cm[i][1] < 60:
-            entry["unsure_tag"] = 1
-            entry["label_pos"] = 0
-            entry["label_neg"] = 0
-            entries[unlabeled_ids[i]] = entry
+            model_tags[unlabelled_docs[i][es_info['mapping']['url']][0]] = "Unsure"
             unsure = unsure + 1
           else:
-            entry["label_pos"] = 1
-            entry["unsure_tag"] = 0
-            entry["label_neg"] = 0
-            entries[unlabeled_ids[i]] = entry
-
+            model_tags[unlabelled_docs[i][es_info['mapping']['url']][0]] = "Maybe relevant"
             label_pos = label_pos + 1
 
         for i in neg_sorted_cm:
-          entry = {}
           if cm[i][0] < 60:
-            entry["unsure_tag"] = 1
-            entry["label_pos"] = 0
-            entry["label_neg"] = 0
-            entries[unlabeled_ids[i]] = entry
-
+            model_tags[unlabelled_docs[i][es_info['mapping']['url']][0]] = "Unsure"
             unsure = unsure + 1
           else:
-            entry["label_neg"] = 1
-            entry["unsure_tag"] = 0
-            entry["label_pos"] = 0
-
-            entries[unlabeled_ids[i]] = entry
+            model_tags[unlabelled_docs[i][es_info['mapping']['url']][0]] = "Maybe irrelevant"
             label_neg = label_neg + 1
 
-        if entries:
-          update_try = 0
-          while (update_try < 10):
-            try:
-              update_document(entries, es_info['activeDomainIndex'], es_info['docType'], self._es)
-              break
-            except:
-              update_try = update_try + 1
-
-        pos_indices = np.nonzero(classp)
-        neg_indices = np.where(classp == 0)
+        self._onlineClassifiers[session['domainId']]['model_tags'] = model_tags
 
     return {"Unsure": unsure, "Maybe relevant": label_pos, "Maybe irrelevant": label_neg}
 
