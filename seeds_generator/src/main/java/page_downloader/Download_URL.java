@@ -174,57 +174,74 @@ public class Download_URL implements Runnable {
 	//Do not process pdf files
 	if(this.url.contains(".pdf"))
 	    return;
-	
-	// Perform a GET request
-	HttpUriRequest request = new HttpGet(url);
 
-	// Set timeout for http request
-	RequestConfig config = RequestConfig.custom()
-	    .setConnectTimeout(timeout * 1000)
-	    .setConnectionRequestTimeout(timeout * 1000)
-	    .setSocketTimeout(timeout * 1000).build();
+	CloseableHttpClient httpclient = null;
 	
-	CloseableHttpClient httpclient = 
-	    HttpClientBuilder.create().setDefaultRequestConfig(config).build();
-	
-	URI url = request.getURI();
-	String domain = url.getHost();
-
-	HttpResponse response = null;
 	try{
-	    response = httpclient.execute(request);
+	    System.err.println("\n\nDOWNLOAD URL: " + url +"\n\n");
+	    // Perform a GET request
+	    HttpUriRequest request = new HttpGet(url);
+	    
+	    // Set timeout for http request
+	    RequestConfig config = RequestConfig.custom()
+		.setConnectTimeout(timeout * 1000)
+		.setConnectionRequestTimeout(timeout * 1000)
+		.setSocketTimeout(timeout * 1000).build();
+	    
+	    httpclient = HttpClientBuilder.create().setDefaultRequestConfig(config).build();
 
+	    long start = System.currentTimeMillis();
+	    URI url = request.getURI();
+	    String domain = url.getHost();
+	    
+	    HttpResponse response = null;
+	    
+	    response = httpclient.execute(request);
+	    System.err.println("\n\nEXECUTE REQUEST:  "+String.valueOf( System.currentTimeMillis()-start/1000.0)+"\n\n");
+	    
 	    int status = response.getStatusLine().getStatusCode();
 
 	    if (status >= 200 && status < 300) {
+		
 		HttpEntity entity = response.getEntity();
 		if(entity != null){
-
+		    start = System.currentTimeMillis();
 		    String responseBody = EntityUtils.toString(entity);
 
 		    String content_type = response.getFirstHeader("Content-Type").getValue();
 		    Integer content_length = (response.getFirstHeader("Content-Length") != null) ? Integer.valueOf(response.getFirstHeader("Content-Length").getValue()) : responseBody.length();
+
+		    System.err.println("\n\n\n GET HEADER INFORMATION " + String.valueOf( System.currentTimeMillis()-start/1000.0)); 
+		    
 		    Map extracted_content = null;
+		    start = System.currentTimeMillis();
 		    if(content_type.contains("text/html")){
 			Extract extract = new Extract();
 			extracted_content = extract.process(responseBody);
 		    }
 
+		    System.err.println("\n\nEXTRACTED TEXT:  "+String.valueOf( System.currentTimeMillis()-start/1000.0)+"\n\n");
 		    if (extracted_content != null) {
 			String content_text = (String)extracted_content.get("content");
 
 			if(title.isEmpty())
 			    title = (String)extracted_content.get("title");
-
+			
+			start = System.currentTimeMillis();
 			if(description.isEmpty())
 			    description = getDescription(responseBody, content_text);
-
+			System.err.println("\n\n\n GET DESCRIPTION " + String.valueOf( System.currentTimeMillis()-start/1000.0)); 
+			
+			start = System.currentTimeMillis();
 			String imageUrl = getImage(responseBody, url.toURL());
+			System.err.println("\n\n\n GET IMAGE URL " + String.valueOf( System.currentTimeMillis()-start/1000.0)); 
 
 			SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
 			date_format.setTimeZone(TimeZone.getTimeZone("UTC"));
 			String timestamp = date_format.format(new Date());
 
+			start = System.currentTimeMillis();
+			System.err.println("\n\n\nSEARCHING URL...........\n\n\n");
 			SearchResponse searchResponse = null;
 			searchResponse = client.prepareSearch(this.es_index)
 			    .setTypes(this.es_doc_type)
@@ -233,8 +250,10 @@ public class Download_URL implements Runnable {
 			    .setQuery(QueryBuilders.termQuery("url", url))
 			    .setFrom(0).setExplain(true)
 			    .execute()
-			    .actionGet();
-
+			    .actionGet(5000);
+			
+			System.err.println("\n\nSEARCH URL:  "+String.valueOf( System.currentTimeMillis()-start/1000.0)+"\n\n");
+			
 			// Construct the object to be updated for the url
 			XContentBuilder jobj = XContentFactory.jsonBuilder().startObject();
 			jobj.field("html", responseBody)
@@ -251,6 +270,7 @@ public class Download_URL implements Runnable {
 
 			SearchHit[] hits = searchResponse.getHits().getHits();
 			for (SearchHit hit : searchResponse.getHits()) {
+			    System.err.println(hit);
 			    Map map = hit.getSource();
 			    ArrayList query_list = (ArrayList)map.get("query");
 			    ArrayList subquery_list = (ArrayList)map.get("subquery");
@@ -262,9 +282,12 @@ public class Download_URL implements Runnable {
 			    if(this.subquery != null && subquery_list != null && !subquery_list.contains(this.subquery)){
 				jobj.field("subquery", subquery_list);
 			    }
-
+			    
+			    start = System.currentTimeMillis();
+			    System.err.println("\n\n\nUPDATING REQUEST............\n\n\n");
 			    UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, hit.getId()).doc(jobj.endObject());
 			    this.client.update(updateRequest).get();
+			    System.err.println("\n\n UPDATE REQUEST:  "+String.valueOf( System.currentTimeMillis()-start/1000.0)+"\n\n");
 			}
 
 			if(hits.length == 0){
@@ -276,10 +299,12 @@ public class Download_URL implements Runnable {
 			    if(this.subquery != null)
 				jobj.field("subquery", new String[]{this.subquery});				     				       
 
+			    System.err.println("INDEX RESPONSE - BEFORE");
 			    IndexResponse indexresponse = this.client.prepareIndex(this.es_index, this.es_doc_type)
 				.setSource(jobj.endObject())
 				.execute()
-				.actionGet();
+				.actionGet(5000);
+			    System.err.println("INDEX RESPONSE - AFTER");
 			}
 		    }
 		} else {
@@ -290,12 +315,15 @@ public class Download_URL implements Runnable {
 		throw new ClientProtocolException("Unexpected response status: " + status);
 	    }
 	} catch (ClientProtocolException e1) {
+	    System.err.println("CLIENT PROTOCOL EXCEPTION");
 	    // TODO Auto-generated catch block
 	    e1.printStackTrace();
 	} catch (IOException e1) {
+	    System.err.println("IO EXCEPTION");
 	    // TODO Auto-generated catch block
 	    e1.printStackTrace();
 	} catch (Exception e) {
+	    System.err.println("EXCEPTION");
 	    e.printStackTrace();
 	}
 	finally {
