@@ -77,6 +77,7 @@ class DomainModel(object):
                            'Group by Correlation': self.tsne
                            # 'K-Means': self.kmeans,
                          }
+    self._predefined_tags = ["Deep Crawl"];
 
     create_config_index()
     create_terms_index()
@@ -249,7 +250,7 @@ class DomainModel(object):
         json: {<tag>: <number of pages for the tag>}
 
     """
-
+    
     es_info = self._esInfo(session['domainId'])
 
     query = {
@@ -273,6 +274,11 @@ class DomainModel(object):
           unique_tags[tag] = num
       else:
         unique_tags["Neutral"] = unique_tags["Neutral"] + 1
+
+    for tag in self._predefined_tags:    
+      if unique_tags.get(tag) is None:
+        unique_tags[tag] = 0
+        
     return unique_tags
 
   def getAvailableModelTags(self, session):
