@@ -6,7 +6,6 @@ from datetime import datetime
 from dateutil import tz
 from sets import Set
 from itertools import product
-import json;
 from signal import SIGTERM
 import shlex
 from pprint import pprint
@@ -34,7 +33,8 @@ from seeds_generator.download import callDownloadUrls, getImage, getDescription
 from seeds_generator.runSeedFinder import RunSeedFinder
 from seeds_generator.concat_nltk import get_bag_of_words
 from elastic.get_config import get_available_domains, get_mapping, get_tag_colors
-from elastic.search_documents import get_context, term_search, search, range_search, multifield_term_search, multifield_query_search, field_missing, field_exists, exec_query
+from elastic.search_documents import get_context, term_search, search, range_search, multifield_term_search, multifield_query_search, field_missing, field_exists
+from elastic.misc_queries import exec_query, random_sample
 from elastic.add_documents import add_document, update_document, delete_document, refresh
 from elastic.get_mtermvectors import getTermStatistics, getTermFrequency
 from elastic.get_documents import (get_most_recent_documents, get_documents,
@@ -2064,21 +2064,15 @@ class DomainModel(object):
 
     sigmoid = self._onlineClassifiers[session['domainId']].get("sigmoid")
     if sigmoid != None:
-      unlabelled_docs = field_missing(es_info["mapping"]["tag"], [es_info['mapping']['url']], self._all,
+
+      # Select random MAX_SAMPLE 
+      filters = [{ "filter" : { "missing" : { "field" : "tag"}}, "weight": 1}]
+      unlabelled_docs = random_sample(None, filters,  [es_info['mapping']['url'], es_info['mapping']['text']], MAX_SAMPLE,
                                       es_info['activeDomainIndex'],
                                       es_info['docType'],
                                       self._es)
 
-      if len(unlabelled_docs) > MAX_SAMPLE:
-        unlabelled_docs = sample(unlabelled_docs, MAX_SAMPLE)
-
-      unlabelled_docs_ids = [doc["id"] for doc in unlabelled_docs]
-
-      unlabelled_docs = get_documents_by_id(unlabelled_docs_ids, [es_info['mapping']['url'], es_info['mapping']['text']],
-                                            es_info['activeDomainIndex'],
-                                            es_info['docType'],
-                                            self._es)
-
+      
       unlabelled_docs = [unlabelled_doc for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['text']) is not None]
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
