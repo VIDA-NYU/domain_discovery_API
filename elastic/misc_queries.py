@@ -18,6 +18,7 @@ def exec_query(query, fields, start=0, pagesCount=100, es_index='memex', es_doc_
     for hit in hits:
         fields = hit['fields']
         fields['id'] = hit['_id']
+        fields['score'] = hit['_score']
         results.append(fields)
 
     return {"total":res["hits"]["total"], "results":results}
@@ -58,6 +59,7 @@ def random_sample(query_input, filters, fields, pagesCount=100, es_index='memex'
     for hit in hits:
         fields = hit['fields']
         fields['id'] = hit['_id']
+        fields['score'] = hit['_score']
         results.append(fields)
 
     return results

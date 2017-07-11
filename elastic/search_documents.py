@@ -26,6 +26,7 @@ def search(field, queryStr, start=0, pageCount=100, fields = [], es_index='memex
         for hit in hits:
             fields = hit['fields']
             fields['id'] = hit['_id']
+            fields['score'] = hit['_score']
             results.append(fields)
 
             return {"total": res['hits']['total'], 'results':results}
@@ -62,6 +63,7 @@ def multifield_query_search(s_fields, start=0, pageCount=100, fields = [], es_in
             else:
                 fields = hit['fields']
                 fields['id'] = hit['_id']
+                fields['score'] = hit['_score']
                 results.append(fields)
 
         return {"total": res['hits']['total'], 'results':results}
@@ -93,6 +95,7 @@ def term_search(field, queryStr, start=0, pageCount=100, fields=[], es_index='me
             else:
                 fields = hit['fields']
                 fields['id'] = hit['_id']
+                fields['score'] = hit['_score']
                 results.append(fields)
 
         return {"total": res['hits']['total'], 'results':results}
@@ -105,14 +108,15 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
     query = {}
     queries = []
     filter_q = None
-
-    #print "\n\n\n",s_fields,"\n\n\n"
+    sort_q = None
     
     for k,v in s_fields.items():
         if "queries" in k:
             queries.extend(v)
         elif "filter" in k:
             filter_q = v
+        elif "sort" in k:
+            sort_q = v
         elif "multi_match" in k:
             for item in v:
                 match_query = {
@@ -147,8 +151,11 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
     if filter_q is not None:
         query["filter"] = filter_q
 
+    if sort_q is not None:
+        query["sort"] = sort_q
+        
     #print "\n\n\n MULTIFIELD TERM SEARCH \n", query,"\n\n\n"
-    
+
     res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pageCount)
     hits = res['hits']['hits']
 
@@ -156,6 +163,7 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
     for hit in hits:
         fields = hit['fields']
         fields['id'] = hit['_id']
+        fields['score'] = hit['_score']
         results.append(fields)
 
     return {"total": res['hits']['total'], 'results':results}
@@ -247,6 +255,7 @@ def range_search(field, from_val, to_val, ret_fields=[], epoch=True,  start=0, p
     for hit in hits:
         fields = hit['fields']
         fields['id'] = hit['_id']
+        fields['score'] = hit['_score']        
         results.append(fields)
 
     return {"total": res['hits']['total'], 'results':results}
@@ -276,6 +285,7 @@ def field_missing(field, fields, pagesCount, es_index='memex', es_doc_type='page
         else:
             fields = {}
         fields['id'] = hit['_id']
+        fields['score'] = hit['_score']
         results.append(fields)
 
     return results
@@ -302,6 +312,7 @@ def field_exists(field, fields, pagesCount, es_index='memex', es_doc_type='page'
     for hit in hits:
         fields = hit['fields']
         fields['id'] = hit['_id']
+        fields['score'] = hit['_score']
         results.append(fields)
 
     return results
