@@ -1340,9 +1340,9 @@ class DomainModel(object):
   def _getMostRecentPages(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    hits = []
+    results = []
     if session['fromDate'] is None and session['filter'] is None:
-      hits = get_most_recent_documents(session['from'], session['pagesCap'],
+      results = get_most_recent_documents(session['from'], session['pagesCap'],
                                        es_info['mapping'],
                                        ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                        session['filter'],
@@ -1350,7 +1350,7 @@ class DomainModel(object):
                                        es_info['docType'],
                                        self._es)
     elif not session['fromDate'] is None and session['filter'] is None:
-        hits = range_search(es_info['mapping']["timestamp"], session['fromDate'], session['toDate'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']['tag'], es_info['mapping']["timestamp"], es_info['mapping']["text"]], True, session['from'], session['pagesCap'],
+        results = range_search(es_info['mapping']["timestamp"], session['fromDate'], session['toDate'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']['tag'], es_info['mapping']["timestamp"], es_info['mapping']["text"]], True, session['from'], session['pagesCap'],
                             es_info['activeDomainIndex'],
                             es_info['docType'],
                             self._es)
@@ -1359,13 +1359,17 @@ class DomainModel(object):
         if not session['fromDate'] is None:
           es_info['mapping']["timestamp"] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
         s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
-        hits = multifield_term_search(s_fields,
-                                      session['from'], session['pagesCap'],
-                                      ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                                      es_info['activeDomainIndex'],
-                                      es_info['docType'],
-                                      self._es)
-    return hits
+        results = multifield_term_search(s_fields,
+                                         session['from'], session['pagesCap'],
+                                         ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                         es_info['activeDomainIndex'],
+                                         es_info['docType'],
+                                         self._es)
+        
+        sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
+        results["results"] = sorted_results
+
+    return results
 
   def _getPagesForMultiCriteria(self, session):
     es_info = self._esInfo(session['domainId'])
@@ -1445,6 +1449,9 @@ class DomainModel(object):
                          es_info['docType'],
                          self._es)
 
+    sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
+    results["results"] = sorted_results
+    
     # if session['selected_morelike']=="moreLike":
     #   morelike_result = self._getMoreLikePagesAll(session, results['results'])
     #   hits['results'].extend(morelike_result)
@@ -1453,6 +1460,9 @@ class DomainModel(object):
 
     return results
 
+  # def _use_rank(record):
+  #   return (result.get("rank") is  None)? result["score"]: result.get("rank")
+  
   def _getPagesForQueries(self, session):
     es_info = self._esInfo(session['domainId'])
 
@@ -1472,6 +1482,12 @@ class DomainModel(object):
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
 
+    s_fields["sort"] = [{
+      "rank": {
+        "order": "asc"
+      }
+    }]
+
     results= multifield_term_search(s_fields,
                                     session['from'],
                                     session['pagesCap'],
@@ -1480,6 +1496,9 @@ class DomainModel(object):
                                     es_info['docType'],
                                     self._es)
 
+    sorted_results = sorted(results["results"], key=lambda result: result["score"] if result.get("rank") is None else int(result["rank"][0]))
+    results["results"] = sorted_results
+    
     #TODO: Revisit when allowing selected_morelike
     # if session['selected_morelike']=="moreLike":
     #   aux_result = self._getMoreLikePagesAll(session, results)
@@ -1515,6 +1534,10 @@ class DomainModel(object):
                                        es_info['activeDomainIndex'],
                                        es_info['docType'],
                                        self._es)
+
+    sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
+    results["results"] = sorted_results
+
       # if session['selected_morelike']=="moreLike":
       #   aux_result = self._getMoreLikePagesAll(session, results)
       #   hits.extend(aux_result)
@@ -1548,11 +1571,14 @@ class DomainModel(object):
 
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
-
+      
     results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                      es_info['activeDomainIndex'],
-                                    es_info['docType'],
+                                     es_info['docType'],
                                      self._es)
+
+    sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
+    results["results"] = sorted_results
 
     return results
 
@@ -1580,8 +1606,11 @@ class DomainModel(object):
 
     results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                      es_info['activeDomainIndex'],
-                                    es_info['docType'],
+                                     es_info['docType'],
                                      self._es)
+  
+    sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
+    results["results"] = sorted_results
 
     return results
 
@@ -1610,6 +1639,9 @@ class DomainModel(object):
                                      es_info['activeDomainIndex'],
                                      es_info['docType'],
                                      self._es)
+
+    sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
+    results["results"] = sorted_results
 
     return results
 
@@ -1645,27 +1677,6 @@ class DomainModel(object):
           aux_result = tag_hits[0:self._pagesCapTerms] + results
       else: aux_result=tag_hits
       return aux_result
-
-
-  def _getUnsureLabelPages(self, session):
-    es_info = self._esInfo(session['domainId'])
-    unsure_label_hits = term_search("unsure_tag", "1", session['from'], session["pagesCap"], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
-
-    return unsure_label_hits
-
-  def _getPosLabelPages(self, session):
-    es_info = self._esInfo(session['domainId'])
-
-    pos_label_hits = term_search("label_pos", "1", session['from'], session["pagesCap"], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
-
-    return pos_label_hits
-
-  def _getNegLabelPages(self, session):
-    es_info = self._esInfo(session['domainId'])
-
-    neg_label_hits = term_search("label_neg", "1", session['from'], session["pagesCap"], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], es_info['docType'], self._es)
-
-    return neg_label_hits
 
   def _getPagesQuery(self, session):
     es_info = self._esInfo(session['domainId'])
