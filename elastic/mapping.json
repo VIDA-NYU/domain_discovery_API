@@ -26,6 +26,10 @@
         "type": "string",
         "term_vector": "yes"
       },
+      "url": {
+          "type": "string",
+	  "index": "not_analyzed"
+      },
       "html": {
         "type": "string",
 	"index": "no"
@@ -57,6 +61,9 @@
       "relevance": {
         "type": "float"
       },
+	"rank": {
+	    "type": "integer"
+	},
       "thumbnail_name": {
         "type": "string"
       },
