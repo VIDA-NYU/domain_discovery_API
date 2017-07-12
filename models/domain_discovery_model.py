@@ -2,6 +2,7 @@ import time
 import calendar
 import os
 import shutil
+from math import fsum
 from datetime import datetime
 from dateutil import tz
 from sets import Set
@@ -51,6 +52,7 @@ from ranking import tfidf, rank, extract_terms, word2vec, get_bigrams_trigrams
 
 from online_classifier.online_classifier import OnlineClassifier
 from online_classifier.tfidf_vector import tfidf_vectorizer
+from online_classifier.tf_vector import tf_vectorizer
 
 #from topik import read_input, tokenize, vectorize, run_model, visualize, TopikProject
 
@@ -94,7 +96,8 @@ class DomainModel(object):
     self.seedfinder = RunSeedFinder()
     self.runningCrawlers={}
     self.runningSeedFinders={}
-
+    self.extractTermsVectorizer = {}
+    
     self._initACHE()
 
   def _encode(self, url):
@@ -974,46 +977,57 @@ class DomainModel(object):
     neg_terms = [field['term'][0] for field in results["results"]]
 
     end = time.time()
-    print "Time to get pos and neg terms = ", end-start
+    print "\nTime to get pos and neg terms = ", end-start,"\n"
 
     start = time.time()
     
     # Get selected pages displayed in the MDS window
     session["from"] = 0
-    results = self._getPagesQuery(session)
+    session["pagesCap"] = MAX_SAMPLE_PAGES
 
+    hits = self._getPagesQuery(session)
+
+    results = hits["results"]
+
+    #avg_score = fsum([result["score"] for result in results])/len(results)
+    avg_score = (results[0]["score"] if results[0].get("score") is not None else -1)/2.0
+        
     end = time.time()
-    print "Time to get query pages = ", end-start
+    print "\nTime to get query pages = ", end-start,"\n"
 
     top_terms = []
 
     start = time.time()
     
     text = []
-    url_ids = [hit["id"] for hit in results["results"]][0:MAX_SAMPLE_PAGES]
+    if avg_score < 0:
+      #No scores available
+      url_ids = [result["id"] for result in results[0:100]]
+    else:
+      url_ids = [result["id"] for result in results if result.get("score") > avg_score][0:100]
+
     if(len(url_ids) > 0):
       results = get_documents_by_id(url_ids, [es_info['mapping']["url"], es_info['mapping']["text"]], es_info["activeDomainIndex"], es_info["docType"], self._es)
       text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results]
 
       end = time.time()
-      print "Time to get text for 500 query pages = ", end-start
+      print "\nTime to get text for 100 query pages = ", end-start,"\n"
 
     if len(url_ids) > 0 and text:
-
       start = time.time()
       tfidf_v = tfidf_vectorizer(ngram_range=(1,3))
       tfidf_v.tfidf(text)
-      if pos_terms:
+      if len(pos_terms) > 5:
         extract_terms_all = extract_terms.extract_terms(tfidf_v)
         [ranked_terms, scores] = extract_terms_all.results(pos_terms)
-        top_terms = [ term for term in ranked_terms if (term not in neg_terms)]
+        top_terms = [ term for term in ranked_terms if (term not in neg_terms and term not in pos_terms)]
         top_terms = top_terms[0:opt_maxNumberOfTerms]
         end = time.time()
-        print "Time to rank top terms by Bayesian sets = ", end-start
+        print "\nTime to rank top terms by Bayesian sets = ", end-start,"\n"
       else:
-        top_terms = [term for term in tfidf_v.getTopTerms(opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms)]
+        top_terms = [term for term in tfidf_v.getTopTerms(opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms and term not in pos_terms)]
         end = time.time()
-        print "Time to get top terms by sorting tfidf= ", end-start
+        print "\nTime to get top terms by sorting tfidf= ", end-start,"\n"
 
     start = time.time()
     
@@ -1023,8 +1037,9 @@ class DomainModel(object):
       "doc_type": es_info['docType']
     }
 
-    results = multifield_query_search(s_fields, 0, 500, ['term'], self._termsIndex, 'terms', self._es)
-    custom_terms = [field['term'][0] for field in results["results"]]
+    hits= multifield_query_search(s_fields, 0, 500, ['term'], self._termsIndex, 'terms', self._es)
+    results = hits["results"]
+    custom_terms = [field['term'][0] for field in results]
 
     for term in custom_terms:
       try:
@@ -1036,12 +1051,14 @@ class DomainModel(object):
       return []
 
     end = time.time()
-    print "Time to remove already annotated terms = ", end-start
+    print "\nTime to remove already annotated terms = ", end-start,"\n"
 
+    start_bar = time.time()
     start = time.time()
     
-    results = term_search(es_info['mapping']['tag'], ['Relevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
-    pos_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results["results"]}
+    hits = term_search(es_info['mapping']['tag'], ['Relevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    results = hits["results"]
+    pos_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results}
     pos_urls = pos_data.keys();
     pos_text = pos_data.values();
 
@@ -1051,14 +1068,39 @@ class DomainModel(object):
     pos_corpus = []
 
     if len(pos_urls) > 1:
-      tfidf_pos = tfidf_vectorizer(ngram_range=(1,3))
-      [_, total_pos_tf, pos_corpus] = tfidf_pos.tfidf(pos_text)
+      tf_pos = tf_vectorizer(max_features=1000, ngram_range=(1,3))
+      pos_urls_v = pos_urls
+      total_pos_tf = None
+      pos_corpus = None
+      if self.extractTermsVectorizer.get(es_info['activeDomainIndex']) is not None:
+        tf_pos = self.extractTermsVectorizer[es_info['activeDomainIndex']]["pos"]
+        pos_urls_v = list(set(pos_urls).difference(set(self.extractTermsVectorizer[es_info['activeDomainIndex']]["pos_urls"])))
+        if len(pos_urls_v) > 0:
+          self.extractTermsVectorizer[es_info['activeDomainIndex']]["pos_urls"] = pos_urls
+          pos_text = [pos_data[url] for url in pos_urls_v]
+          [total_pos_tf, pos_corpus] = tf_pos.tf(pos_text)
+          self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"] = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"].vstack(total_pos_tf)
+        else:
+          total_pos_tf = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"]
+          pos_corpus = self.extractTermsVectorizer[es_info['activeDomainIndex']]["pos_corpus"]
+      else:
+        self.extractTermsVectorizer[es_info['activeDomainIndex']] = {"pos":tf_pos, "pos_urls":pos_urls}
+        [total_pos_tf, pos_corpus] = tf_pos.tf(pos_text)
+        self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"] = total_pos_tf
+        self.extractTermsVectorizer[es_info['activeDomainIndex']]["pos_corpus"] = pos_corpus
+        
       total_pos_tf = np.sum(total_pos_tf, axis=0)
       total_pos = np.sum(total_pos_tf)
       total_pos_tf = total_pos_tf.flatten().tolist()[0]
 
-    results = term_search(es_info['mapping']['tag'], ['Irrelevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
-    neg_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results["results"]}
+    end = time.time()
+    print "\n Time to vectorize pos terms = ", end-start, "\n"
+
+    start = time.time()
+    
+    hits = term_search(es_info['mapping']['tag'], ['Irrelevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    results = hits["results"]
+    neg_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results}
     neg_urls = neg_data.keys();
     neg_text = neg_data.values();
 
@@ -1068,36 +1110,53 @@ class DomainModel(object):
     neg_corpus = []
 
     if len(neg_urls) > 1:
-      tfidf_neg = tfidf_vectorizer(ngram_range=(1,3))
-      [_, total_neg_tf, neg_corpus] = tfidf_neg.tfidf(neg_text)
+      tf_neg = tf_vectorizer(max_features=1000, ngram_range=(1,3))
+      neg_urls_v = neg_urls
+      total_neg_tf = None
+      neg_corpus = None
+      if self.extractTermsVectorizer.get(es_info['activeDomainIndex']) is not None:
+        if self.extractTermsVectorizer[es_info['activeDomainIndex']].get("neg") is not None:
+          tf_neg = self.extractTermsVectorizer[es_info['activeDomainIndex']]["neg"]
+          neg_urls_v = list(set(neg_urls).difference(set(self.extractTermsVectorizer[es_info['activeDomainIndex']]["neg_urls"])))
+          if len(neg_urls_v) > 0:
+            self.extractTermsVectorizer[es_info['activeDomainIndex']]["neg_urls"] = neg_urls
+            neg_text = [neg_data[url] for url in neg_urls_v]
+            [total_neg_tf, neg_corpus] = tf_neg.tf(neg_text)
+            self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_neg_tf"] = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_neg_tf"].vstack(total_neg_tf)
+          else:
+            total_neg_tf = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_neg_tf"]
+            neg_corpus = self.extractTermsVectorizer[es_info['activeDomainIndex']]["neg_corpus"]
+        else:
+          self.extractTermsVectorizer[es_info['activeDomainIndex']].update({"neg":tf_neg, "neg_urls":neg_urls})
+          [total_neg_tf, neg_corpus] = tf_neg.tf(neg_text)
+          self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_neg_tf"] = total_neg_tf
+          self.extractTermsVectorizer[es_info['activeDomainIndex']]["neg_corpus"] = neg_corpus
+
       total_neg_tf = np.sum(total_neg_tf, axis=0)
       total_neg = np.sum(total_neg_tf)
       total_neg_tf = total_neg_tf.flatten().tolist()[0]
-
+      
+    end = time.time()
+    print "\n Time to vectorize neg terms = ", end-start, "\n"
+  
     entry = {}
-    for key in top_terms + [term for term in custom_terms if term in pos_corpus or term in neg_corpus]:
+
+    start = time.time()
+    
+    for key in top_terms + pos_terms + neg_terms + [term for term in custom_terms if term in pos_corpus or term in neg_corpus]:
+      entry[key] = {"pos_freq":0, "neg_freq":0, "tag":[]}
       if key in pos_corpus:
         if total_pos != 0:
-          entry[key] = {"pos_freq": (float(total_pos_tf[pos_corpus.index(key)])/total_pos)}
-        else:
-          entry[key] = {"pos_freq": 0}
-      else:
-        entry[key] = {"pos_freq": 0}
+          entry[key]["pos_freq"] =  (float(total_pos_tf[pos_corpus.index(key)])/total_pos)
 
       if key in neg_corpus:
         if total_neg != 0:
-          entry[key].update({"neg_freq": (float(total_neg_tf[neg_corpus.index(key)])/total_neg)})
-        else:
-          entry[key].update({"neg_freq": 0})
-      else:
-        entry[key].update({"neg_freq": 0})
+          entry[key]["neg_freq"] = (float(total_neg_tf[neg_corpus.index(key)])/total_neg)
 
       if key in pos_terms:
-        entry[key].update({"tag": ["Positive"]})
+        entry[key]["tag"].append("Positive")
       elif key in neg_terms:
-        entry[key].update({"tag": ["Negative"]})
-      else:
-        entry[key].update({"tag": []})
+        entry[key]["tag"].append("Negative")
 
     for key in custom_terms:
       if entry.get(key) == None:
@@ -1108,11 +1167,14 @@ class DomainModel(object):
           entry[key]["tag"].append("Negative")
       else:
         entry[key]["tag"].append("Custom")
-
-        end = time.time()
-    print "Time to compute terms in pos and neg pages = ", end-start
+        
+    end = time.time()
+    print "\n Time to compte percentage in pos and neg urls = ", end-start, "\n"
     
-    terms = [[key, entry[key]["pos_freq"], entry[key]["neg_freq"], entry[key]["tag"]] for key in custom_terms + top_terms] # + top_bigrams + top_trigrams
+    end = time.time()
+    print "\nTime to compute terms in pos and neg pages = ", end-start_bar,"\n"
+    
+    terms = [[key, entry[key]["pos_freq"], entry[key]["neg_freq"], entry[key]["tag"]] for key in custom_terms + [term for term in pos_terms if term not in custom_terms] + [term for term in neg_terms if term not in custom_terms] + top_terms ] # + top_bigrams + top_trigrams
 
     return terms
 
@@ -1466,9 +1528,18 @@ class DomainModel(object):
   def _getPagesForQueries(self, session):
     es_info = self._esInfo(session['domainId'])
 
+    sorting_criteria = "rank"
+    
     s_fields = {}
     if not session['filter'] is None:
       s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
+      sorting_criteria = "score"
+    else:
+      s_fields["sort"] = [{
+        "rank": {
+          "order": "asc"
+        }
+      }]
 
     if not session['fromDate'] is None:
       s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
@@ -1482,12 +1553,6 @@ class DomainModel(object):
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
 
-    s_fields["sort"] = [{
-      "rank": {
-        "order": "asc"
-      }
-    }]
-
     results= multifield_term_search(s_fields,
                                     session['from'],
                                     session['pagesCap'],
@@ -1496,7 +1561,11 @@ class DomainModel(object):
                                     es_info['docType'],
                                     self._es)
 
-    sorted_results = sorted(results["results"], key=lambda result: result["score"] if result.get("rank") is None else int(result["rank"][0]))
+    if sorting_criteria == "rank":
+      sorted_results = sorted(results["results"], key=lambda result: result["score"] if result.get("rank") is None else int(result["rank"][0]))
+    elif sorting_criteria == "score":
+      sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
+
     results["results"] = sorted_results
     
     #TODO: Revisit when allowing selected_morelike
