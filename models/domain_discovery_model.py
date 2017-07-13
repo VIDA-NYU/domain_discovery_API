@@ -1,6 +1,5 @@
 import time
 import calendar
-import os
 import shutil
 from math import fsum
 from datetime import datetime
@@ -25,9 +24,8 @@ from subprocess import PIPE
 
 import linecache
 from sys import exc_info
-from os import chdir, listdir, environ, makedirs, rename, chmod, walk
+from os import chdir, listdir, environ, makedirs, rename, chmod, walk, remove
 from os.path import isfile, join, exists, isdir
-from zipfile import ZipFile
 
 from elasticsearch import Elasticsearch
 
@@ -95,7 +93,6 @@ class DomainModel(object):
 
     self.pool = Pool(max_workers=3)
     self.seedfinder = RunSeedFinder()
-    self.runningCrawlers={}
     self.runningSeedFinders={}
     self.extractTermsVectorizer = {}
     
@@ -150,13 +147,25 @@ class DomainModel(object):
   def setPath(self, path):
     self._path = path
 
+  def getPath(self, path):
+    return self._path
+
+  def setCrawlerModel(self, crawlerModel):
+    self._crawlerModel = crawlerModel
+  
   def getStatus(self, session):
     status = {}
 
-    if len(self.runningCrawlers.keys()) > 0:
+    runningCrawlers = self._crawlerModel.runningCrawlers
+    
+    if len(runningCrawlers.keys()) > 0:
       status["Crawler"] = []
-      for k,v in self.runningCrawlers.items():
-        status["Crawler"].append({"domain": v["domain"], "status": v["status"]})
+      for k,v in runningCrawlers.items():
+        for type, crawler_info in v.items():
+          if self._crawlerModel.getStatus(type,session):
+            status["Crawler"].append({"domain": crawler_info["domain"], "status": crawler_info["status"], "description": type})
+          else:
+            status["Crawler"].append({"domain": crawler_info["domain"], "status": "Crawler Stopped", "description":type})
 
     if len(self.runningSeedFinders.keys()) > 0:
       status["SeedFinder"] = []
@@ -168,7 +177,7 @@ class DomainModel(object):
   def stopProcess(self, process, process_info):
     print "Stop Process ",process," ",process_info
     if process == "Crawler":
-      session = {"domainId": self.runningCrawlers.keys()[0]}
+      session = {"domainId": runningCrawlers.keys()[0]}
       self.stopCrawler(session)
     elif process == "SeedFinder":
       query = process_info["description"].replace('Query: ', '')
@@ -713,7 +722,7 @@ class DomainModel(object):
 
     if (not isfile(domainmodel_dir+"pageclassifier.model")):
       self.runningSeedFinders[terms]["status"] = "Creating Model"
-      self.createModel(session, zip=False)
+      self._crawlerModel.createModel(session, zip=False)
 
     print "\n\n\n RUN SEED FINDER",terms,"\n\n\n"
 
@@ -1794,174 +1803,6 @@ class DomainModel(object):
 # Generate Model
 #######################################################################################################
 
-  def createModel(self, session, zip=True):
-    """ Create an ACHE model to be applied to SeedFinder and focused crawler.
-    It saves the classifiers, features, the training data in the <project>/data/<domain> directory.
-    If zip=True all generated files and folders are zipped into a file.
-
-    Parameters:
-        session (json): should have domainId
-
-    Returns:
-        None
-    """
-    es_info = self._esInfo(session['domainId']);
-
-    data_dir = self._path + "/data/"
-    data_domain  = data_dir + es_info['activeDomainIndex']
-    data_training = data_domain + "/training_data/"
-    data_negative = data_domain + "/training_data/negative/"
-    data_positive = data_domain + "/training_data/positive/"
-
-    if (not isdir(data_positive)):
-      # Create dir if it does not exist
-      makedirs(data_positive)
-    else:
-      # Remove all previous files
-      for filename in os.listdir(data_positive):
-        os.remove(data_positive+filename)
-
-    if (not isdir(data_negative)):
-      # Create dir if it does not exist
-      makedirs(data_negative)
-    else:
-      # Remove all previous files
-      for filename in os.listdir(data_negative):
-        os.remove(data_negative+filename)
-
-    pos_tags = "Relevant"
-    neg_tags = "Irrelevant"
-    try:
-      pos_tags = session['model']['positive']
-    except KeyError:
-      print "Using default positive tags"
-
-    try:
-      neg_tags = session['model']['negative']
-    except KeyError:
-      print "Using default negative tags"
-
-    pos_docs = []
-    for tag in pos_tags.split(','):
-      s_fields = {}
-      query = {
-        "wildcard": {es_info['mapping']["tag"]:tag}
-      }
-      s_fields["queries"] = [query]
-
-      results = multifield_term_search(s_fields,
-                                       0, self._all,
-                                       ["url", es_info['mapping']['html']],
-                                       es_info['activeDomainIndex'],
-                                       es_info['docType'],
-                                       self._es)
-      
-      pos_docs = pos_docs + results['results']
-      
-    neg_docs = []
-    for tag in neg_tags.split(','):
-      s_fields = {}
-      query = {
-        "wildcard": {es_info['mapping']["tag"]:tag}
-      }
-      s_fields["queries"] = [query]
-      results = multifield_term_search(s_fields,
-                                       0, self._all,
-                                       ["url", es_info['mapping']['html']],
-                                       es_info['activeDomainIndex'],
-                                       es_info['docType'],
-                                       self._es)
-      neg_docs = neg_docs + results['results']
-
-    pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
-    neg_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in neg_docs}
-
-    seeds_file = data_domain +"/seeds.txt"
-    print "Seeds path ", seeds_file
-    with open(seeds_file, 'w') as s:
-      for url in pos_html:
-        try:
-          file_positive = data_positive + self._encode(url.encode('utf8'))
-          s.write(url.encode('utf8') + '\n')
-          with open(file_positive, 'w') as f:
-            f.write(pos_html[url])
-
-        except IOError:
-          _, exc_obj, tb = exc_info()
-          f = tb.tb_frame
-          lineno = tb.tb_lineno
-          filename = f.f_code.co_filename
-          linecache.checkcache(filename)
-          line = linecache.getline(filename, lineno, f.f_globals)
-          print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
-
-    for url in neg_html:
-      try:
-        file_negative = data_negative + self._encode(url.encode('utf8'))
-        with open(file_negative, 'w') as f:
-          f.write(neg_html[url])
-      except IOError:
-        _, exc_obj, tb = exc_info()
-        f = tb.tb_frame
-        lineno = tb.tb_lineno
-        filename = f.f_code.co_filename
-        linecache.checkcache(filename)
-        line = linecache.getline(filename, lineno, f.f_globals)
-        print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
-
-    domainmodel_dir = data_domain + "/models/"
-
-    if (not isdir(domainmodel_dir)):
-      makedirs(domainmodel_dir)
-
-    ache_home = environ['ACHE_HOME']
-    comm = ache_home + "/bin/ache buildModel -t " + data_training + " -o "+ domainmodel_dir + " -c " + ache_home + "/config/sample_config/stoplist.txt"
-    p = Popen(comm, shell=True, stderr=PIPE)
-    output, errors = p.communicate()
-    print output
-    print errors
-
-    if zip:
-      print data_dir
-      print es_info['activeDomainIndex']
-      zip_dir = data_dir
-      #Create tha model in the client (client/build/models/). Just the client site is being exposed
-      saveClientSite = zip_dir.replace('server/data/','client/build/models/')
-      if (not isdir(saveClientSite)):
-        makedirs(saveClientSite)
-      zip_filename = saveClientSite + es_info['activeDomainIndex'] + "_model.zip"
-
-      with ZipFile(zip_filename, "w") as modelzip:
-        if (isfile(domainmodel_dir + "/pageclassifier.features")):
-          print "zipping file: "+domainmodel_dir + "/pageclassifier.features"
-          modelzip.write(domainmodel_dir + "/pageclassifier.features", "pageclassifier.features")
-
-        if (isfile(domainmodel_dir + "/pageclassifier.model")):
-          print "zipping file: "+domainmodel_dir + "/pageclassifier.model"
-          modelzip.write(domainmodel_dir + "/pageclassifier.model", "pageclassifier.model")
-
-        if (exists(data_domain + "/training_data/positive")):
-          print "zipping file: "+ data_domain + "/training_data/positive"
-          for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/positive"):
-            for html_file in filenames:
-              modelzip.write(dirpath + "/" + html_file, "training_data/positive/" + html_file)
-
-        if (exists(data_domain + "/training_data/negative")):
-          print "zipping file: "+ data_domain + "/training_data/negative"
-          for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/negative"):
-            for html_file in filenames:
-              modelzip.write(dirpath + "/" + html_file, "training_data/negative/" + html_file)
-
-        if (isfile(data_domain +"/seeds.txt")):
-          print "zipping file: "+data_domain +"/seeds.txt"
-          modelzip.write(data_domain +"/seeds.txt", es_info['activeDomainIndex'] + "_seeds.txt")
-        chmod(zip_filename, 0o777)
-
-      return "models/" + es_info['activeDomainIndex'] + "_model.zip"
-    else:
-      return None
-
-
   def updateOnlineClassifier(self, session):
     domainId = session['domainId']
     es_info = self._esInfo(domainId)
@@ -2201,74 +2042,6 @@ class DomainModel(object):
 
     return {"Unsure": unsure, "Maybe relevant": label_pos, "Maybe irrelevant": label_neg}
 
-#######################################################################################################
-# Run Crawler
-#######################################################################################################
-
-  def startCrawler(self, session):
-    """ Start the ACHE crawler for the specfied domain with the domain model. The
-    results are stored in the same index
-
-    Parameters:
-    session (json): should have domainId
-
-    Returns:
-    None
-    """
-
-    domainId = session['domainId']
-
-    if self.runningCrawlers.get(domainId) is not None:
-      return self.runningCrawlers[domainId]['status']
-
-    if len(self.runningCrawlers.keys()) == 0:
-      es_info = self._esInfo(domainId)
-
-      data_dir = self._path + "/data/"
-      data_domain  = data_dir + es_info['activeDomainIndex']
-      domainmodel_dir = data_domain + "/models/"
-      domainoutput_dir = data_domain + "/output/"
-
-      if (not isdir(domainmodel_dir)):
-        self.createModel(session, False)
-      if (not isdir(domainmodel_dir)):
-        return "No domain model available"
-
-      ache_home = environ['ACHE_HOME']
-      comm = ache_home + "/bin/ache startCrawl -c " + self._path + " -e " + es_info['activeDomainIndex'] + " -t " + es_info['docType']  + " -m " + domainmodel_dir + " -o " + domainoutput_dir + " -s " + data_domain + "/seeds.txt"
-      p = Popen(shlex.split(comm))
-      self.runningCrawlers[domainId] = {'process': p, 'domain': self._domains[domainId]['domain_name'], 'status': "Running" }
-
-      return "Running"
-    return "Running in domain: " + self._domains[self.runningCrawlers.keys()[0]]['domain_name']
-
-  def stopCrawler(self, session):
-    """ Stop the ACHE crawler for the specfied domain with the domain model. The
-    results are stored in the same index
-
-    Parameters:
-    session (json): should have domainId
-
-    Returns:
-    None
-    """
-
-    domainId = session['domainId']
-
-    p = self.runningCrawlers[domainId]['process']
-
-    p.terminate()
-
-    print "\n\n\nCrawler Shutting Down\n\n\n"
-
-    self.runningCrawlers[domainId]['status'] = "Terminating"
-
-    p.wait()
-
-    self.runningCrawlers.pop(domainId)
-
-    print "\n\n\nCrawler Stopped\n\n\n"
-    return "Crawler Stopped"
 
 #######################################################################################################
 
