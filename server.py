@@ -45,18 +45,19 @@ class Page(object):
     return param.split(delimiter) if len(param) > 0 else []
 
   # Default constructor reading app config file.
-  def __init__(self, model, path):
+  def __init__(self, models, path):
     # Folder with html content.
     self._HTML_DIR = os.path.join(path, u"../client/build")
     self.lock = Lock()
-    # TODO Use SeedCrawlerModelAdapter self._model = SeedCrawlerModelAdapter()
-    self._model = model
+    # TODO Use SeedCrawlerModelAdapter self._domain_model = SeedCrawlerModelAdapter()
+    self._domain_model = models["domain"]
+    self._crawler_model = models["crawler"]
 
 
   @cherrypy.expose
   def getStatus(self, session):
     session = json.loads(session)
-    res = self._model.getStatus(session)
+    res = self._domain_model.getStatus(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
   
@@ -68,34 +69,34 @@ class Page(object):
   # ]
   @cherrypy.expose
   def getAvailableDomains(self, type):
-    res = self._model.getAvailableDomains()
+    res = self._domain_model.getAvailableDomains()
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps({"crawlers":res, "type":type})
 
   @cherrypy.expose
   def getAvailableProjectionAlgorithms(self):
-    res = self._model.getAvailableProjectionAlgorithms()
+    res = self._domain_model.getAvailableProjectionAlgorithms()
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
   @cherrypy.expose
   def getAvailableTLDs(self, session):
     session = json.loads(session)
-    res = self._model.getAvailableTLDs(session)
+    res = self._domain_model.getAvailableTLDs(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
   
   @cherrypy.expose
   def getAvailableQueries(self, session):
     session = json.loads(session)
-    res = self._model.getAvailableQueries(session)
+    res = self._domain_model.getAvailableQueries(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
   @cherrypy.expose
   def getAvailableTags(self, session, event):
     session = json.loads(session)
-    res = self._model.getAvailableTags(session)
+    res = self._domain_model.getAvailableTags(session)
     result = {
       'tags': res,
       'event':event
@@ -106,28 +107,28 @@ class Page(object):
   @cherrypy.expose
   def getAvailableModelTags(self, session):
     session = json.loads(session)
-    result = self._model.getAvailableModelTags(session)
+    result = self._domain_model.getAvailableModelTags(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(result)
 
   @cherrypy.expose
   def getAvailableCrawledData(self, session):
     session = json.loads(session)
-    result = self._model.getAvailableCrawledData(session)
+    result = self._domain_model.getAvailableCrawledData(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(result)
   
   @cherrypy.expose
   def getAnnotatedTerms(self, session):
     session = json.loads(session)
-    result = self._model.getAnnotatedTerms(session)
+    result = self._domain_model.getAnnotatedTerms(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(result)
 
 
   @cherrypy.expose
   def getTagColors(self, domainId):
-    res = self._model.getTagColors(domainId)
+    res = self._domain_model.getTagColors(domainId)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
@@ -135,7 +136,7 @@ class Page(object):
   def updateColors(self, session, colors):
     session = json.loads(session)
     colors = json.loads(colors)
-    res = self._model.updateColors(session, colors)
+    res = self._domain_model.updateColors(session, colors)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
@@ -143,7 +144,7 @@ class Page(object):
   @cherrypy.expose
   def queryWeb(self, terms, session):
     session = json.loads(session)
-    res = self._model.queryWeb(terms, session=session)
+    res = self._domain_model.queryWeb(terms, session=session)
     cherrypy.response.headers["Content-Type"] = "text/plain;"
     return res
 
@@ -151,46 +152,47 @@ class Page(object):
   @cherrypy.expose
   def runSeedFinder(self, terms, session):
     session = json.loads(session)
-    res = self._model.runSeedFinder(terms, session)
+    res = self._domain_model.runSeedFinder(terms, session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
   # Add crawler
   @cherrypy.expose
   def addDomain(self, index_name):
-    self._model.addDomain(index_name)
+    self._domain_model.addDomain(index_name)
 
   # Delete crawler
   @cherrypy.expose
   def delDomain(self, domains):
-    self._model.delDomain(json.loads(domains))
+    self._domain_model.delDomain(json.loads(domains))
 
   # Create model
   @cherrypy.expose
   def createModel(self, session):
     session = json.loads(session)
-    return self._model.createModel(session)
+    esInfo = self._domain_model.esInfo(session["domainId"])
+    return self._crawler_model.createModel(session)
 
   # Run Crawler
   @cherrypy.expose
-  def startCrawler(self, session):
+  def startCrawler(self, session, type="focused", seeds=[]):
     session = json.loads(session)
     cherrypy.response.headers["Content-Type"] = "text/plain;"
-    return self._model.startCrawler(session)
+    return self._crawler_model.startCrawler(type, seeds , session)
 
   # Stop Crawler
   @cherrypy.expose
   def stopCrawler(self, session):
     session = json.loads(session)
     cherrypy.response.headers["Content-Type"] = "text/plain;"
-    return self._model.stopCrawler(session)
+    return self._crawler_model.stopCrawler(session)
 
   # Stop Process
   @cherrypy.expose
   def stopProcess(self, process, process_info):
     process_info = json.loads(process_info)
     cherrypy.response.headers["Content-Type"] = "text/plain;"
-    return self._model.stopProcess(process, process_info)
+    return self._domain_model.stopProcess(process, process_info)
 
   # Returns number of pages downloaded between ts1 and ts2 for active crawler.
   # ts1 and ts2 are Unix epochs (seconds after 1970).
@@ -213,7 +215,7 @@ class Page(object):
   @cherrypy.expose
   def getPagesSummary(self, opt_ts1=None, opt_ts2=None, opt_applyFilter=False, session=None):
     session = json.loads(session)
-    res = self._model.getPagesSummary(opt_ts1, opt_ts2, opt_applyFilter, session)
+    res = self._domain_model.getPagesSummary(opt_ts1, opt_ts2, opt_applyFilter, session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
@@ -229,19 +231,19 @@ class Page(object):
   @cherrypy.expose
   def getTermsSummary(self, session):
     session = json.loads(session)
-    res = self._model.getTermsSummaryDomain(session = session)
+    res = self._domain_model.getTermsSummaryDomain(session = session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
   # Sets limit to pages returned by @getPages.
   @cherrypy.expose
   def setPagesCountCap(self, pagesCap):
-    self._model.setPagesCountCap(pagesCap)
+    self._domain_model.setPagesCountCap(pagesCap)
 
   # Set the date range to filter data
   @cherrypy.expose
   def setDateTime(self, fromDate=None, toDate=None):
-    self._model.setDateTime(fromDate, toDate)
+    self._domain_model.setDateTime(fromDate, toDate)
 
   # Returns most recent downloaded pages.
   # Returns dictionary in the format:
@@ -256,8 +258,8 @@ class Page(object):
   @cherrypy.expose
   def getPages(self, session):
     session = json.loads(session)
-    data = self._model.getPages(session)
-    colors = self._model.getTagColors(session['domainId'])
+    data = self._domain_model.getPages(session)
+    colors = self._domain_model.getTagColors(session['domainId'])
     res = {"data": data}#//, "plot": selection_plot(data, colors)}
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
@@ -265,25 +267,25 @@ class Page(object):
   # Boosts set of pages: crawler exploits outlinks for the given set of pages.
   @cherrypy.expose
   def boostPages(self, pages):
-    self._model.boostPages(pages)
+    self._domain_model.boostPages(pages)
 
   # Crawl forward links
   @cherrypy.expose
   def getForwardLinks(self, urls, session):
     session = json.loads(session)
-    self._model.getForwardLinks(urls, session);
+    self._domain_model.getForwardLinks(urls, session);
 
   # Crawl backward links
   @cherrypy.expose
   def getBackwardLinks(self, urls, session):
     session = json.loads(session)
-    self._model.getBackwardLinks(urls, session);
+    self._domain_model.getBackwardLinks(urls, session);
 
   # Fetches snippets for a given term.
   @cherrypy.expose
   def getTermSnippets(self, term, session):
     session = json.loads(session)
-    res = self._model.getTermSnippets(term, session)
+    res = self._domain_model.getTermSnippets(term, session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
@@ -296,7 +298,7 @@ class Page(object):
     pages = Page.extractListParam(pages)
     applyTagFlag = Page.extractBooleanParam(applyTagFlag)
     self.lock.acquire()
-    output = self._model.setPagesTag(pages, tag, applyTagFlag, session)
+    output = self._domain_model.setPagesTag(pages, tag, applyTagFlag, session)
     self.lock.release()
     return output
 
@@ -308,33 +310,33 @@ class Page(object):
     session = json.loads(session)
     terms = Page.extractListParam(terms)
     applyTagFlag =  Page.extractBooleanParam(applyTagFlag)
-    self._model.setTermsTag(terms, tag, applyTagFlag, session)
+    self._domain_model.setTermsTag(terms, tag, applyTagFlag, session)
 
   # Update online classifier
   @cherrypy.expose
   def updateOnlineClassifier(self, session):
     session = json.loads(session)
-    return self._model.updateOnlineClassifier(session)
+    return self._domain_model.updateOnlineClassifier(session)
 
   # Update unlabeled sample predictions
   @cherrypy.expose
   def predictUnlabeled(self, session):
     session = json.loads(session)
-    return self._model.predictUnlabeled(session)
+    return self._domain_model.predictUnlabeled(session)
 
 
   # Delete terms from term window and from the ddt_terms index
   @cherrypy.expose
   def deleteTerm(self, term, session):
     session = json.loads(session)
-    self._model.deleteTerm(term, session)
+    self._domain_model.deleteTerm(term, session)
   
   # Download the pages of uploaded urls
   @cherrypy.expose
   def uploadUrls(self, urls, tag, session):
     urls = urls.replace("\n", " ")
     session = json.loads(session)
-    res = self._model.uploadUrls(urls, tag, session)
+    res = self._domain_model.uploadUrls(urls, tag, session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps({"status": "Done"})
 
@@ -343,7 +345,7 @@ class Page(object):
   def extractTerms(self, numberOfTerms, session):
     session = json.loads(session)
     numberOfTerms = int(numberOfTerms)
-    res = self._model.extractTerms(numberOfTerms, session)
+    res = self._domain_model.extractTerms(numberOfTerms, session)
 
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
@@ -388,7 +390,7 @@ class Page(object):
   @lru_cache(maxsize=5)
   def make_pages_query(self, session):
     session = json.loads(session)
-    pages = self._model.getPlottingData(session)
+    pages = self._domain_model.getPlottingData(session)
     return parse_es_response(pages)
 
   @cherrypy.expose
