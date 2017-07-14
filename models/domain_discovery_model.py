@@ -14,6 +14,7 @@ from pprint import pprint
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 import scipy as sp
 import numpy as np
@@ -1008,24 +1009,39 @@ class DomainModel(object):
 
     if(len(url_ids) > 0):
       results = get_documents_by_id(url_ids, [es_info['mapping']["url"], es_info['mapping']["text"]], es_info["activeDomainIndex"], es_info["docType"], self._es)
-      text = [" ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results]
+      results = {hit[es_info['mapping']["url"]][0]: " ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results if hit[es_info['mapping']["text"]][0] != ""}
 
+      urls = results.keys()
+      text = results.values()
+      
       end = time.time()
       print "\nTime to get text for 100 query pages = ", end-start,"\n"
 
-    if len(url_ids) > 0 and text:
+    if len(urls) > 0 and text:
       start = time.time()
-      tfidf_v = tfidf_vectorizer(ngram_range=(1,3))
-      tfidf_v.tfidf(text)
+      
+      tfidf_v = tfidf_vectorizer(max_features=1000, ngram_range=(1,3))
+        
+      [tfidf_array,_, corpus] = tfidf_v.tfidf(text)
+
+      # tfidf_v = TfidfVectorizer(max_features=1000, stop_words="english", ngram_range=(1,3))
+      # tfidf_array= tfidf_v.fit_transform(text)
+      # corpus = tfidf_v.get_feature_names()
+      
+      end = time.time()
+      print "\nTime to vectorize 100 query pages = ", end-start,"\n"
+
       if len(pos_terms) > 5:
-        extract_terms_all = extract_terms.extract_terms(tfidf_v)
+        start = time.time()
+        extract_terms_all = extract_terms.extract_terms(urls, tfidf_array, corpus)
         [ranked_terms, scores] = extract_terms_all.results(pos_terms)
+
         top_terms = [ term for term in ranked_terms if (term not in neg_terms and term not in pos_terms)]
         top_terms = top_terms[0:opt_maxNumberOfTerms]
         end = time.time()
         print "\nTime to rank top terms by Bayesian sets = ", end-start,"\n"
       else:
-        top_terms = [term for term in tfidf_v.getTopTerms(opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms and term not in pos_terms)]
+        top_terms = [term for term in tfidf_vectorizer.getTopTerms(tfidf_array, corpus, len(text), opt_maxNumberOfTerms+len(neg_terms)) if (term not in neg_terms and term not in pos_terms)]
         end = time.time()
         print "\nTime to get top terms by sorting tfidf= ", end-start,"\n"
 
