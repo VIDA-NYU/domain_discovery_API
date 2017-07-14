@@ -62,11 +62,12 @@ public class Download {
 	    if(downloaderService.awaitTermination(10, TimeUnit.SECONDS))
 		System.out.println("\n\n\n downloaderService terminated \n\n\n");
 	    else {
-		long start = System.currentTimeMillis();
+		//long start = System.currentTimeMillis();
 		System.out.println("\n\n\n downloaderService timedout \n\n\n");
-		this.client.close();
 		downloaderService.shutdownNow();
-		System.err.println("\n\nDOWNLOADER SERVICE TIMEDOUT:  "+String.valueOf( System.currentTimeMillis()-start/1000.0)+"\n\n");
+		this.client.close();
+		//System.err.println("\n\nDOWNLOADER SERVICE TIMEDOUT:  "+String.valueOf( System.currentTimeMillis()-start/1000.0)+"\n\n");
+
 	    }
 
 	    //downloaderService.awaitTermination(10, TimeUnit.SECONDS);
