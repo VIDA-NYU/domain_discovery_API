@@ -6,16 +6,19 @@ import BayesianSets
 import numpy as np
 import scipy.sparse as sps
 
-class extract_terms:
-    def __init__(self, tfidf):
-        self.table = tfidf
+from online_classifier.tfidf_vector import tfidf_vectorizer
 
-    def getTopTerms(self,top):
-        return self.table.getTopTerms(top)
+class extract_terms:
+    def __init__(self, urls, tfidf_array, corpus):
+        self._tfidf_array = tfidf_array
+        self._corpus = corpus
+        self._urls = urls
         
     def results(self,query_terms):
         
-        [urls, corpus, d] = self.table.getTfidfArray()
+        urls = self._urls
+        corpus = self._corpus
+        d = self._tfidf_array
 
         if sps.issparse(d):
             d = d.toarray()
@@ -53,7 +56,7 @@ class extract_terms:
         offset_rank_index = [index[x] for x in rank_index]
 
         # Get the terms corresponding to the scored indices
-        ranked_terms = self.table.getTerms(offset_rank_index)
+        ranked_terms = tfidf_vectorizer.getTerms(corpus, offset_rank_index)
 
         ranked_scores = [score[rank_index[i]] for i in range(0, len(score))]
         return [ranked_terms,ranked_scores]
