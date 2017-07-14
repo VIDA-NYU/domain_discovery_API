@@ -70,7 +70,7 @@ def callDownloadUrls(query, subquery, urls_str, tag, es_info):
              " -s " + es_server
 
       if tag != "":
-        comm = comm + " -t " + tag
+        comm = comm + " -t '" + tag + "'"
       
       if subquery is not None:
         comm = comm + " -sq \"" + subquery + "\""
@@ -87,7 +87,7 @@ def callDownloadUrls(query, subquery, urls_str, tag, es_info):
            " -s " + es_server
 
     if tag != "":
-      comm = comm + " -t " + tag
+      comm = comm + " -t '" + tag + "'"
 
     if subquery is not None:
       comm = comm + " -sq \"" + subquery + "\""
