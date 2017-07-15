@@ -166,26 +166,6 @@ class Page(object):
   def delDomain(self, domains):
     self._domain_model.delDomain(json.loads(domains))
 
-  # Create model
-  @cherrypy.expose
-  def createModel(self, session):
-    session = json.loads(session)
-    esInfo = self._domain_model.esInfo(session["domainId"])
-    return self._crawler_model.createModel(session)
-
-  # Run Crawler
-  @cherrypy.expose
-  def startCrawler(self, session, type="focused", seeds=[]):
-    session = json.loads(session)
-    cherrypy.response.headers["Content-Type"] = "text/plain;"
-    return self._crawler_model.startCrawler(type, seeds , session)
-
-  # Stop Crawler
-  @cherrypy.expose
-  def stopCrawler(self, session):
-    session = json.loads(session)
-    cherrypy.response.headers["Content-Type"] = "text/plain;"
-    return self._crawler_model.stopCrawler(session)
 
   # Stop Process
   @cherrypy.expose
@@ -350,7 +330,34 @@ class Page(object):
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
+  # Create model
+  @cherrypy.expose
+  def createModel(self, session):
+    session = json.loads(session)
+    esInfo = self._domain_model.esInfo(session["domainId"])
+    return self._crawler_model.createModel(session)
 
+  # Run Crawler
+  @cherrypy.expose
+  def startCrawler(self, session, type="focused", seeds=[]):
+    session = json.loads(session)
+    cherrypy.response.headers["Content-Type"] = "text/plain;"
+    return self._crawler_model.startCrawler(type, seeds , session)
+
+  # Stop Crawler
+  @cherrypy.expose
+  def stopCrawler(self, session):
+    session = json.loads(session)
+    cherrypy.response.headers["Content-Type"] = "text/plain;"
+    return self._crawler_model.stopCrawler(session)
+
+  # Get recommendations for deep crawling
+  @cherrypy.expose
+  def getRecommendations(self, session):
+    session = json.loads(session)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return self._crawler_model.getRecommendations(session)
+    
   # Returns available dataset options.
   @cherrypy.expose
   def getAvailableDatasets(self):
