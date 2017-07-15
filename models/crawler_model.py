@@ -10,6 +10,7 @@ import json
 from zipfile import ZipFile
 
 from elastic.search_documents import multifield_term_search
+from elastic.aggregations import get_unique_values
 from elastic.get_config import get_available_domains
 from elastic.config import es
 
@@ -312,7 +313,7 @@ class CrawlerModel():
             except ConnectionError:
                 print "\n\nFailed to connect to server to start crawler. Server may not be running\n\n"
                 return "Failed to connect to server. Server may not be running"
-            
+
         return "Running in domain: " + self._domains[domainId]['domain_name']
 
     def stopCrawler(self, type, session):
@@ -386,7 +387,65 @@ class CrawlerModel():
             except KeyError:
                 return False
 
+        pprint(self.getRecommendations(session))
+        
         return response["crawlerRunning"]
+
+#######################################################################################################
+# Recommendations
+#######################################################################################################
+
+    def getRecommendations(self, session):
+        domainId = session['domainId']
+        
+        es_info = self._esInfo(domainId)
+
+
+        #Get tlds in crawled relevant pages
+        query = {
+            "term": {
+                "isRelevant": {
+                    "value": "relevant"
+                }
+            }
+        }
+
+        unique_tlds = {}
+        
+        for k, v in get_unique_values('domain', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+            if "." in k:
+                unique_tlds[k] = v
+
+        #Get tlds in pages annotated deep crawl
+        query = {
+            "term": {
+                "tag": {
+                    "value": "Deep Crawl"
+                }
+            }
+        }
+
+        unique_dp_tlds = {}
+        
+        for k, v in get_unique_values('domain', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+            if "." in k:
+                unique_dp_tlds[k] = v
+
+        #Get tlds that are not alreadt annotated deep crawl
+        recommendations = list(set(unique_tlds.keys()).difference(set(unique_dp_tlds.keys())))
+
+        recommended_tlds = {}
+
+        for k, v in unique_tlds.items(): 
+            if k in recommendations:
+                recommended_tlds[k] = v
+
+        return recommended_tlds
+
+        
+        
+        
+        
         
 
     
