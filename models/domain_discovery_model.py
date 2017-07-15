@@ -232,7 +232,7 @@ class DomainModel(object):
 
     unique_tlds = {}
 
-    for k, v in get_unique_values('domain', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+    for k, v in get_unique_values('domain', None, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
       if "." in k:
         unique_tlds[k] = v
     
@@ -249,7 +249,7 @@ class DomainModel(object):
 
     """
     es_info = self._esInfo(session['domainId'])
-    queries = get_unique_values('query', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    queries = get_unique_values('query', None, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
 
     return queries
 
@@ -278,7 +278,7 @@ class DomainModel(object):
     tags_neutral = self._es.count(es_info['activeDomainIndex'], es_info['docType'],body=query)
     unique_tags = {"Neutral": tags_neutral['count']}
 
-    tags = get_unique_values('tag', self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
+    tags = get_unique_values('tag', None, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
     for tag, num in tags.iteritems():
       if tag != "":
         if unique_tags.get(tag) is not None:
