@@ -865,20 +865,14 @@ class DomainModel(object):
 
     """
     es_info = self._esInfo(session['domainId'])
-
-    s_fields = {
-      "term": "",
-      "index": es_info['activeDomainIndex'],
-      "doc_type": es_info['docType'],
-    }
-
-    tags = []
+    
+    ids = []
     for term in terms:
-      s_fields["term"] = term
-      res = multifield_term_search(s_fields, 0, 1, ['tag'], self._termsIndex, 'terms', self._es)
-      tags.extend(res["results"])
+      ids.append(term+"_"+es_info['activeDomainIndex']+"_"+ es_info['docType'])
+      
+    tags = get_documents_by_id(ids, ['term', 'tag'], self._termsIndex, 'terms', self._es)
 
-    results = {result['id']: result['tag'][0] for result in tags}
+    results = {result['term'][0]: result['tag'][0] for result in tags}
 
     add_entries = []
     update_entries = {}
@@ -917,7 +911,7 @@ class DomainModel(object):
     else:
       for term in terms:
         if len(results) > 0:
-          if not results.get(term) is None:
+          if results.get(term) is not None:
             if tag in results[term]:
               entry = {
                 "term" : term,
