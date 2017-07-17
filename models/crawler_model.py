@@ -68,7 +68,7 @@ class CrawlerModel():
         session (json): should have domainId
         
         Returns:
-        None
+        Zip file url or message text
         """
         path = self._path
 
@@ -124,7 +124,9 @@ class CrawlerModel():
                                              self._es)
       
             pos_docs = pos_docs + results['results']
-      
+
+        pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
+        
         neg_docs = []
         for tag in neg_tags.split(','):
             s_fields = {}
@@ -140,7 +142,6 @@ class CrawlerModel():
                                              self._es)
             neg_docs = neg_docs + results['results']
 
-        pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
         neg_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in neg_docs}
 
         seeds_file = data_domain +"/seeds.txt"
@@ -151,7 +152,7 @@ class CrawlerModel():
                     file_positive = data_positive + self._encode(url.encode('utf8'))
                     s.write(url.encode('utf8') + '\n')
                     with open(file_positive, 'w') as f:
-                        f.write(pos_html[url])
+                        f.write(pos_html[url].encode('utf8'))
 
                 except IOError:
                     _, exc_obj, tb = exc_info()
@@ -166,7 +167,7 @@ class CrawlerModel():
             try:
                 file_negative = data_negative + self._encode(url.encode('utf8'))
                 with open(file_negative, 'w') as f:
-                    f.write(neg_html[url])
+                    f.write(neg_html[url].encode('utf8'))
             except IOError:
                 _, exc_obj, tb = exc_info()
                 f = tb.tb_frame
@@ -181,52 +182,151 @@ class CrawlerModel():
         if (not isdir(domainmodel_dir)):
             makedirs(domainmodel_dir)
 
-        ache_home = environ['ACHE_HOME']
-        comm = ache_home + "/bin/ache buildModel -t " + data_training + " -o "+ domainmodel_dir + " -c " + ache_home + "/config/sample_config/stoplist.txt"
-        p = Popen(comm, shell=True, stderr=PIPE)
-        output, errors = p.communicate()
-        print output
-        print errors
+        if len(neg_docs) > 0:
+            ache_home = environ['ACHE_HOME']
+            comm = ache_home + "/bin/ache buildModel -t " + data_training + " -o "+ domainmodel_dir + " -c " + ache_home + "/config/sample_config/stoplist.txt"
+            p = Popen(comm, shell=True, stderr=PIPE)
+            output, errors = p.communicate()
+            print output
+            print errors
+        else:
+            return "No irrelevant pages to build domain model"
 
         if zip:
-            print data_dir
-            print es_info['activeDomainIndex']
-            zip_dir = data_dir
-            #Create tha model in the client (client/build/models/). Just the client site is being exposed
-            saveClientSite = zip_dir.replace('server/data/','client/build/models/')
-            if (not isdir(saveClientSite)):
-                makedirs(saveClientSite)
-            zip_filename = saveClientSite + es_info['activeDomainIndex'] + "_model.zip"
+            return self._createModelZip(session)
+        
+        return "Model created successfully"
 
-            with ZipFile(zip_filename, "w") as modelzip:
-                if (isfile(domainmodel_dir + "/pageclassifier.features")):
-                    print "zipping file: "+domainmodel_dir + "/pageclassifier.features"
-                    modelzip.write(domainmodel_dir + "/pageclassifier.features", "pageclassifier.features")
+    def createRegExModel(self, terms=[], session=None, zip=True):
+        """ Create a RegEx ACHE model to be applied to SeedFinder and focused crawler.
+        It saves a pageclassifier.yml in  <project>/data/<domain> directory which contains 
+        the regular expressions to be applied to classify the page. The regular expressions 
+        are generated from terms annotated or uploaded by the user if no terms are input 
+        to the method.
 
-                if (isfile(domainmodel_dir + "/pageclassifier.model")):
-                    print "zipping file: "+domainmodel_dir + "/pageclassifier.model"
-                    modelzip.write(domainmodel_dir + "/pageclassifier.model", "pageclassifier.model")
+        If zip=True all generated files and folders are zipped into a file.
+        
+        Parameters:
+        session (json): should have domainId
+        
+        Returns:
+        Zip file url or message text
+        """
 
-                if (exists(data_domain + "/training_data/positive")):
-                    print "zipping file: "+ data_domain + "/training_data/positive"
-                    for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/positive"):
-                        for html_file in filenames:
-                            modelzip.write(dirpath + "/" + html_file, "training_data/positive/" + html_file)
+        path = self._path
+                
+        es_info = self._esInfo(session["domainId"])
+        
+        data_dir = path + "/data/"
+        data_domain  = data_dir + es_info['activeDomainIndex']
+        domainmodel_dir = data_domain + "/models/"
 
-                if (exists(data_domain + "/training_data/negative")):
-                    print "zipping file: "+ data_domain + "/training_data/negative"
-                    for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/negative"):
-                        for html_file in filenames:
-                            modelzip.write(dirpath + "/" + html_file, "training_data/negative/" + html_file)
+        #If no terms are provided then use the annotated and uploaded terms
+        if len(terms) == 0:
+            s_fields = {
+                "index": es_info['activeDomainIndex'],
+                "doc_type": es_info['docType']
+            }
 
-                if (isfile(data_domain +"/seeds.txt")):
-                    print "zipping file: "+data_domain +"/seeds.txt"
-                    modelzip.write(data_domain +"/seeds.txt", es_info['activeDomainIndex'] + "_seeds.txt")
-                    chmod(zip_filename, 0o777)
+            s_fields["filter"] = { "query":
+                                   {
+                                       "query_string":
+                                       {
+                                           "default_field": "tag",
+                                           "query": "Positive"
+                                       }
+                                   }
+            }
+            results = multifield_term_search(s_fields,
+                                             0, self._all,
+                                             ["term"],
+                                             "ddt_terms",
+                                             "terms",
+                                             self._es)
+            terms = [result["term"][0] for result in results["results"]]
 
-                return "models/" + es_info['activeDomainIndex'] + "_model.zip"
+        #Generate patterns from terms
+        with open( domainmodel_dir+"/pageclassifier.yml", "w") as pc_f:
+            pc_f.write("type: regex\nparameters:\n    boolean_operator: \"OR\"\n")
+            
+            patterns = ""
+            for term in terms:
+                patterns = patterns + "        - .*"+term+".*\n"
 
-        return
+            pc_f.write("    title:\n      boolean_operator: \"OR\"\n      regexes:\n")
+            pc_f.write(patterns)
+            pc_f.write("    content:\n      boolean_operator: \"OR\"\n      regexes:\n")
+            pc_f.write(patterns)
+            
+        if zip:
+            return self._createModelZip(session)
+        
+        return "Model created successfully"
+
+            
+    def _createModelZip(self, session):
+        
+        """ Create a zip of generated crawler model
+        
+        Parameters:
+        session (json): should have domainId
+        
+        Returns:
+        Zip file url or message text
+        """
+
+
+        path = self._path
+        
+        es_info = self._esInfo(session["domainId"])
+        
+        data_dir = path + "/data/"
+
+        print data_dir
+        print es_info['activeDomainIndex']
+
+        data_domain  = data_dir + es_info['activeDomainIndex']
+        domainmodel_dir = data_domain + "/models/"
+        
+        zip_dir = data_dir
+        #Create tha model in the client (client/build/models/). Just the client site is being exposed
+        saveClientSite = zip_dir.replace('server/data/','client/build/models/')
+        if (not isdir(saveClientSite)):
+            makedirs(saveClientSite)
+        zip_filename = saveClientSite + es_info['activeDomainIndex'] + "_model.zip"
+
+        with ZipFile(zip_filename, "w") as modelzip:
+            if (isfile(domainmodel_dir + "/pageclassifier.features")):
+                print "zipping file: "+domainmodel_dir + "/pageclassifier.features"
+                modelzip.write(domainmodel_dir + "/pageclassifier.features", "pageclassifier.features")
+
+            if (isfile(domainmodel_dir + "/pageclassifier.model")):
+                print "zipping file: "+domainmodel_dir + "/pageclassifier.model"
+                modelzip.write(domainmodel_dir + "/pageclassifier.model", "pageclassifier.model")
+
+            if (exists(data_domain + "/training_data/positive")):
+                print "zipping file: "+ data_domain + "/training_data/positive"
+                for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/positive"):
+                    for html_file in filenames:
+                        modelzip.write(dirpath + "/" + html_file, "training_data/positive/" + html_file)
+
+            if (exists(data_domain + "/training_data/negative")):
+                print "zipping file: "+ data_domain + "/training_data/negative"
+                for (dirpath, dirnames, filenames) in walk(data_domain + "/training_data/negative"):
+                    for html_file in filenames:
+                        modelzip.write(dirpath + "/" + html_file, "training_data/negative/" + html_file)
+
+            if (isfile(data_domain +"/seeds.txt")):
+                print "zipping file: "+data_domain +"/seeds.txt"
+                modelzip.write(data_domain +"/seeds.txt", es_info['activeDomainIndex'] + "_seeds.txt")
+                chmod(zip_filename, 0o777)
+
+            if (isfile(domainmodel_dir + "/pageclassifier.yml")):
+                print "zipping file: "+domainmodel_dir + "/pageclassifier.yml"
+                modelzip.write(domainmodel_dir + "/pageclassifier.yml", "pageclassifier.yml")
+                
+
+        return "models/" + es_info['activeDomainIndex'] + "_model.zip"
 
 #######################################################################################################
 # Run Crawler
@@ -358,7 +458,6 @@ class CrawlerModel():
 # Crawler Status
 #######################################################################################################
 
-
     def getStatus(self, type, session):
 
         domainId = session["domainId"]
@@ -387,8 +486,6 @@ class CrawlerModel():
             except KeyError:
                 return False
 
-        pprint(self.getRecommendations(session))
-        
         return response["crawlerRunning"]
 
 #######################################################################################################
@@ -396,6 +493,17 @@ class CrawlerModel():
 #######################################################################################################
 
     def getRecommendations(self, session):
+        """ Method to recommend tlds for deep crawling. These are tlds in the crawled relevant pages 
+        which have not yet been marked for deep crawl and are sorted by the number of relevant urls 
+        in the tld that were crawled.
+        
+        Parameters:
+        session (json): should have domainId
+        
+        Returns:
+        {<tld>:<number of relevant pages crawler>}
+        """
+
         domainId = session['domainId']
         
         es_info = self._esInfo(domainId)
