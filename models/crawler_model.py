@@ -11,8 +11,9 @@ from zipfile import ZipFile
 
 from elastic.search_documents import multifield_term_search
 from elastic.aggregations import get_unique_values
-from elastic.get_config import get_available_domains
+from elastic.get_config import get_available_domains, get_model_tags
 from elastic.config import es
+from elastic.add_documents import update_document
 
 from ache_config import ache_focused_crawler_server, ache_focused_crawler_port, ache_deep_crawler_server, ache_deep_crawler_port
 
@@ -550,8 +551,51 @@ class CrawlerModel():
 
         return recommended_tlds
 
+
+    def saveModelTags(self, session):
+
+        domainId = session['domainId']
         
+        es_info = self._esInfo(domainId)
+
+        pos_tags = []
+        try:
+            pos_tags = session['model']['positive']
+        except KeyError:
+            print "Using default positive tags"
+            
+        neg_tags = []
+        try:
+            neg_tags = session['model']['negative']
+        except KeyError:
+            print "Using default negative tags"
+
+        model_tags = get_model_tags(self._es)
+
+        prev_pos_tags = model_tags[domainId].get("positive")
         
+        if prev_pos_tags is None or not prev_pos_tags or len(set(pos_tags).intersection(set(prev_pos_tags))) != len(pos_tags):
+            entry = {
+                domainId: {
+                    "positive": pos_tags,
+                    "index":  es_info["activeDomainIndex"]
+                }
+            }
+            
+            update_document(entry, "config", "model_tags", self._es)
+
+        prev_neg_tags = model_tags[domainId].get("negative")
+        
+        if prev_neg_tags is None or not prev_neg_tags or len(set(neg_tags).intersection(set(prev_neg_tags))) != len(neg_tags):
+            entry = {
+                domainId: {
+                    "negative": neg_tags,
+                    "index":  es_info["activeDomainIndex"]
+                }
+            }
+            
+            update_document(entry, "config", "model_tags", self._es)
+                        
         
         
         
