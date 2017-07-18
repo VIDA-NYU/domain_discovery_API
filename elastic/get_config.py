@@ -73,6 +73,33 @@ def get_tag_colors(es=None):
     return res
 
 
+def get_model_tags(es=None):
+    if es is None:
+        es = default_es
+        
+    query = {
+        "query": {
+            "match_all": {}
+        }
+    }
+    res = es.search(body=query, 
+                    index='config',
+                    doc_type='model_tags',
+                    size=100
+                )
+    
+    hits = res['hits']['hits']
+
+    res = {}
+    for hit in hits:
+        res[hit['_id']] = {'index': hit['_source']['index']}
+        if hit['_source'].get('positive') is not None:
+            res[hit['_id']]['positive'] = hit['_source']['positive']
+        if hit['_source'].get('negative') is not None:
+            res[hit['_id']]['negative'] = hit['_source']['negative']        
+
+    return res
+
 def convert_to_epoch(dt):
     epoch = datetime.utcfromtimestamp(0)
     delta = dt - epoch
