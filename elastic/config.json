@@ -45,6 +45,21 @@
 			"type": "string"
 		    }
 		}
+	    },
+	    "model_tags": {
+		"properties": {
+		    "index": {
+			"type": "integer"
+		    },
+		    "positive": {
+			"type": "string",
+			"index": "not_analyzed"
+		    },
+		    "negaitive": {
+			"type": "string",
+			"index": "not_analyzed"
+		    }
+		}
 	    }
 	}
     }
