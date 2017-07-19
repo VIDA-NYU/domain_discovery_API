@@ -489,7 +489,7 @@ class CrawlerModel():
 
         return response["crawlerRunning"]
 
-#######################################################################################################
+##########################a#############################################################################
 # Recommendations
 #######################################################################################################
 
@@ -551,11 +551,45 @@ class CrawlerModel():
 
         return recommended_tlds
 
+##########################a#############################################################################
+# Manage Model Tags Settings
+#######################################################################################################
+
+    def getModelTags(self, domainId):
+        """ Method to get tags to be considered positive or negative for building a model
+        
+        Parameters:
+        domainId 
+        
+        Returns:
+        {"index": <name of index of domain>, "positive": [], "negative": []}
+        """
+        
+        model_tags = get_model_tags(self._es).get(domainId)
+        
+        tags = None
+        if model_tags is not None:
+            tags = {"index": model_tags["index"]}
+        if  model_tags.get("positive") is not None:
+            tags["positive"] =  model_tags["positive"]
+        if  model_tags.get("negative") is not None:
+            tags["negative"] =  model_tags["negative"]
+
+        return tags
+
 
     def saveModelTags(self, session):
-
-        domainId = session['domainId']
+        """ Method to save tags to be considered positive or negative for building a model
         
+        Parameters:
+        session (json): should have domainId, should have {"model": {"positive": []}} to set positive tags,
+                        should have {"model": {"negative": []}}  to set negative tags
+        
+        Returns:
+        None
+        """
+        domainId = session["domainId"]
+
         es_info = self._esInfo(domainId)
 
         pos_tags = []
@@ -570,9 +604,9 @@ class CrawlerModel():
         except KeyError:
             print "Using default negative tags"
 
-        model_tags = get_model_tags(self._es)
+        model_tags = self.getModelTags(domainId)
 
-        prev_pos_tags = model_tags[domainId].get("positive")
+        prev_pos_tags = model_tags.get("positive")
         
         if prev_pos_tags is None or not prev_pos_tags or len(set(pos_tags).intersection(set(prev_pos_tags))) != len(pos_tags):
             entry = {
@@ -584,7 +618,7 @@ class CrawlerModel():
             
             update_document(entry, "config", "model_tags", self._es)
 
-        prev_neg_tags = model_tags[domainId].get("negative")
+        prev_neg_tags = model_tags.get("negative")
         
         if prev_neg_tags is None or not prev_neg_tags or len(set(neg_tags).intersection(set(prev_neg_tags))) != len(neg_tags):
             entry = {
