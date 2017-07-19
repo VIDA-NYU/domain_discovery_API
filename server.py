@@ -138,7 +138,7 @@ class Page(object):
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
 
-    @cherrypy.expose
+  @cherrypy.expose
   def saveModelTags(self, session):
     res = self._crawler_model.saveModelTags(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
