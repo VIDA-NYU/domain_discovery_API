@@ -133,6 +133,18 @@ class Page(object):
     return json.dumps(res)
 
   @cherrypy.expose
+  def getModelTags(self, domainId):
+    res = self._crawler_model.getModelTags(domainId)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(res)
+
+    @cherrypy.expose
+  def saveModelTags(self, session):
+    res = self._crawler_model.saveModelTags(session)
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(res)
+
+  @cherrypy.expose
   def updateColors(self, session, colors):
     session = json.loads(session)
     colors = json.loads(colors)
@@ -346,10 +358,10 @@ class Page(object):
 
   # Stop Crawler
   @cherrypy.expose
-  def stopCrawler(self, session):
+  def stopCrawler(self, session, type="focused"):
     session = json.loads(session)
     cherrypy.response.headers["Content-Type"] = "text/plain;"
-    return self._crawler_model.stopCrawler(session)
+    return self._crawler_model.stopCrawler(type, session)
 
   # Get recommendations for deep crawling
   @cherrypy.expose
