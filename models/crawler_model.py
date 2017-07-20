@@ -31,9 +31,9 @@ class CrawlerModel():
         self.runningCrawlers={}
         self._domains = get_available_domains(self._es)
         self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain", "title":"title"}
-        self._servers = {"focused": "http://"+ache_focused_crawler_server+":"+ache_focused_crawler_port, 
+        self._servers = {"focused": "http://"+ache_focused_crawler_server+":"+ache_focused_crawler_port,
                          "deep": 'http://'+ache_deep_crawler_server+":"+ache_deep_crawler_port}
-        
+
     def _encode(self, url):
         return urllib2.quote(url).replace("/", "%2F")
 
@@ -64,17 +64,17 @@ class CrawlerModel():
         """ Create an ACHE model to be applied to SeedFinder and focused crawler.
         It saves the classifiers, features, the training data in the <project>/data/<domain> directory.
         If zip=True all generated files and folders are zipped into a file.
-        
+
         Parameters:
         session (json): should have domainId
-        
+
         Returns:
         Zip file url or message text
         """
         path = self._path
 
         es_info = self._esInfo(session["domainId"])
-        
+
         data_dir = path + "/data/"
         data_domain  = data_dir + es_info['activeDomainIndex']
         data_training = data_domain + "/training_data/"
@@ -123,11 +123,11 @@ class CrawlerModel():
                                              es_info['activeDomainIndex'],
                                              es_info['docType'],
                                              self._es)
-      
+
             pos_docs = pos_docs + results['results']
 
         pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
-        
+
         neg_docs = []
         for tag in neg_tags.split(','):
             s_fields = {}
@@ -195,29 +195,29 @@ class CrawlerModel():
 
         if zip:
             return self._createModelZip(session)
-        
+
         return "Model created successfully"
 
     def createRegExModel(self, terms=[], session=None, zip=True):
         """ Create a RegEx ACHE model to be applied to SeedFinder and focused crawler.
-        It saves a pageclassifier.yml in  <project>/data/<domain> directory which contains 
-        the regular expressions to be applied to classify the page. The regular expressions 
-        are generated from terms annotated or uploaded by the user if no terms are input 
+        It saves a pageclassifier.yml in  <project>/data/<domain> directory which contains
+        the regular expressions to be applied to classify the page. The regular expressions
+        are generated from terms annotated or uploaded by the user if no terms are input
         to the method.
 
         If zip=True all generated files and folders are zipped into a file.
-        
+
         Parameters:
         session (json): should have domainId
-        
+
         Returns:
         Zip file url or message text
         """
 
         path = self._path
-                
+
         es_info = self._esInfo(session["domainId"])
-        
+
         data_dir = path + "/data/"
         data_domain  = data_dir + es_info['activeDomainIndex']
         domainmodel_dir = data_domain + "/models/"
@@ -249,7 +249,7 @@ class CrawlerModel():
         #Generate patterns from terms
         with open( domainmodel_dir+"/pageclassifier.yml", "w") as pc_f:
             pc_f.write("type: regex\nparameters:\n    boolean_operator: \"OR\"\n")
-            
+
             patterns = ""
             for term in terms:
                 patterns = patterns + "        - .*"+term+".*\n"
@@ -258,29 +258,29 @@ class CrawlerModel():
             pc_f.write(patterns)
             pc_f.write("    content:\n      boolean_operator: \"OR\"\n      regexes:\n")
             pc_f.write(patterns)
-            
+
         if zip:
             return self._createModelZip(session)
-        
+
         return "Model created successfully"
 
-            
+
     def _createModelZip(self, session):
-        
+
         """ Create a zip of generated crawler model
-        
+
         Parameters:
         session (json): should have domainId
-        
+
         Returns:
         Zip file url or message text
         """
 
 
         path = self._path
-        
+
         es_info = self._esInfo(session["domainId"])
-        
+
         data_dir = path + "/data/"
 
         print data_dir
@@ -288,7 +288,7 @@ class CrawlerModel():
 
         data_domain  = data_dir + es_info['activeDomainIndex']
         domainmodel_dir = data_domain + "/models/"
-        
+
         zip_dir = data_dir
         #Create tha model in the client (client/build/models/). Just the client site is being exposed
         saveClientSite = zip_dir.replace('server/data/','client/build/models/')
@@ -325,7 +325,7 @@ class CrawlerModel():
             if (isfile(domainmodel_dir + "/pageclassifier.yml")):
                 print "zipping file: "+domainmodel_dir + "/pageclassifier.yml"
                 modelzip.write(domainmodel_dir + "/pageclassifier.yml", "pageclassifier.yml")
-                
+
 
         return "models/" + es_info['activeDomainIndex'] + "_model.zip"
 
@@ -336,10 +336,10 @@ class CrawlerModel():
     def startCrawler(self, type, seeds, session):
         """ Start the ACHE crawler for the specfied domain with the domain model. The
         results are stored in the same index
-        
+
         Parameters:
         session (json): should have domainId
-        
+
         Returns:
         None
         """
@@ -355,7 +355,7 @@ class CrawlerModel():
         elif self.getStatus(type, session):
             self.runningCrawlers[domainId] = {type: {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
             return "Running"
-        
+
         if type == "focused":
             data_dir = self._path + "/data/"
             data_domain  = data_dir + es_info['activeDomainIndex']
@@ -388,7 +388,7 @@ class CrawlerModel():
                     return "Running"
                 else:
                     return "Failed to run crawler"
-                
+
             except ConnectionError:
                 print "\n\nFailed to connect to server to start crawler. Server may not be running\n\n"
                 return "Failed to connect to server. Server may not be running"
@@ -411,7 +411,7 @@ class CrawlerModel():
                     return "Running"
                 else:
                     return "Failed to run crawler"
-                
+
             except ConnectionError:
                 print "\n\nFailed to connect to server to start crawler. Server may not be running\n\n"
                 return "Failed to connect to server. Server may not be running"
@@ -421,10 +421,10 @@ class CrawlerModel():
     def stopCrawler(self, type, session):
         """ Stop the ACHE crawler for the specfied domain with the domain model. The
         results are stored in the same index
-        
+
         Parameters:
         session (json): should have domainId
-        
+
         Returns:
         None
         """
@@ -432,7 +432,7 @@ class CrawlerModel():
         domainId = session['domainId']
 
         if self.getStatus(type, session):
-            
+
             self.runningCrawlers[domainId][type]['status'] = "Terminating"
             try:
                 r = requests.post(self._servers[type]+"/stopCrawl")
@@ -447,7 +447,7 @@ class CrawlerModel():
                     self._crawlerStopped(type, session)
                 else:
                     return "Failed to stop crawler"
-                
+
             except ConnectionError:
                 print "\n\nFailed to connect to server to stop crawler. Server may not be running\n\n"
                 return "Failed to connect to server. Server may not be running"
@@ -463,12 +463,12 @@ class CrawlerModel():
     def getStatus(self, type, session):
 
         domainId = session["domainId"]
-        
+
         try:
             r = requests.get(self._servers[type]+"/status")
 
             print "\n\n ACHE server status response code: ", r.status_code, "\n\n"
-            
+
             if r.status_code == 200:
                 response = json.loads(r.text)
             elif r.status_code == 404:
@@ -478,7 +478,7 @@ class CrawlerModel():
                     return False
                 except KeyError:
                     return False
-                
+
         except ConnectionError:
             print "\n\nFailed to connect to server for status. Server may not be running\n\n"
             try:
@@ -495,13 +495,13 @@ class CrawlerModel():
 #######################################################################################################
 
     def getRecommendations(self, session):
-        """ Method to recommend tlds for deep crawling. These are tlds in the crawled relevant pages 
-        which have not yet been marked for deep crawl and are sorted by the number of relevant urls 
+        """ Method to recommend tlds for deep crawling. These are tlds in the crawled relevant pages
+        which have not yet been marked for deep crawl and are sorted by the number of relevant urls
         in the tld that were crawled.
-        
+
         Parameters:
         session (json): should have domainId
-        
+
         Returns:
         {<tld>:<number of relevant pages crawler>}
         """
@@ -521,7 +521,7 @@ class CrawlerModel():
         }
 
         unique_tlds = {}
-        
+
         for k, v in get_unique_values('domain', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
             if "." in k:
                 unique_tlds[k] = v
@@ -536,7 +536,7 @@ class CrawlerModel():
         }
 
         unique_dp_tlds = {}
-        
+
         for k, v in get_unique_values('domain', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
             if "." in k:
                 unique_dp_tlds[k] = v
@@ -546,7 +546,7 @@ class CrawlerModel():
 
         recommended_tlds = {}
 
-        for k, v in unique_tlds.items(): 
+        for k, v in unique_tlds.items():
             if k in recommendations:
                 recommended_tlds[k] = v
 
@@ -558,10 +558,10 @@ class CrawlerModel():
 
     def getModelTags(self, domainId):
         """ Method to get tags to be considered positive or negative for building a model
-        
+
         Parameters:
-        domainId 
-        
+        domainId
+
         Returns:
         {"index": <name of index of domain>, "positive": [], "negative": []}
         """
@@ -581,11 +581,11 @@ class CrawlerModel():
 
     def saveModelTags(self, session):
         """ Method to save tags to be considered positive or negative for building a model
-        
+
         Parameters:
         session (json): should have domainId, should have {"model": {"positive": []}} to set positive tags,
                         should have {"model": {"negative": []}}  to set negative tags
-        
+
         Returns:
         None
         """
@@ -598,7 +598,7 @@ class CrawlerModel():
             pos_tags = session['model']['positive']
         except KeyError:
             print "Using default positive tags"
-            
+
         neg_tags = []
         try:
             neg_tags = session['model']['negative']
@@ -613,7 +613,7 @@ class CrawlerModel():
                 "index":  es_info["activeDomainIndex"]
             }
         }
-        
+
         update_document(entry, "config", "model_tags", self._es)
 
         entry = {
@@ -622,12 +622,5 @@ class CrawlerModel():
                 "index":  es_info["activeDomainIndex"]
             }
         }
-        
-        update_document(entry, "config", "model_tags", self._es)
-                        
-        
-        
-        
 
-    
-    
+        update_document(entry, "config", "model_tags", self._es)
