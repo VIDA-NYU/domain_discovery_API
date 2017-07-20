@@ -97,8 +97,8 @@ class CrawlerModel():
             for filename in listdir(data_negative):
                 remove(data_negative+filename)
 
-        pos_tags = "Relevant"
-        neg_tags = "Irrelevant"
+        pos_tags = ["Relevant"]
+        neg_tags = ["Irrelevant"]
         try:
             pos_tags = session['model']['positive']
         except KeyError:
@@ -110,7 +110,7 @@ class CrawlerModel():
             print "Using default negative tags"
 
         pos_docs = []
-        for tag in pos_tags.split(','):
+        for tag in pos_tags: #.split(','):
             s_fields = {}
             query = {
                 "wildcard": {es_info['mapping']["tag"]:tag}
@@ -129,7 +129,7 @@ class CrawlerModel():
         pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
 
         neg_docs = []
-        for tag in neg_tags.split(','):
+        for tag in neg_tags: #.split(','):
             s_fields = {}
             query = {
                 "wildcard": {es_info['mapping']["tag"]:tag}
@@ -362,7 +362,7 @@ class CrawlerModel():
             domainoutput_dir = data_domain + "/output/"
 
             if (not isdir(domainmodel_dir)):
-                self._crawlerModel.createModel(session, zip=True)
+                self.createModel(session, zip=True)
             if (not isdir(domainmodel_dir)):
                 return "No domain model available"
 
@@ -446,10 +446,10 @@ class CrawlerModel():
                     elif response["stutdownInitiated"]:
                         self.runningCrawlers[domainId][type]['status'] = "Terminating"
                         return "Terminating"
-                    
+
                 elif r.status_code == 404 or r.status_code == 500:
                     return "Failed to stop crawler"
-                
+
             except ConnectionError:
                 print "\n\nFailed to connect to server to stop crawler. Server may not be running\n\n"
                 return "Failed to connect to server. Server may not be running"
@@ -552,7 +552,7 @@ class CrawlerModel():
 
         recommended_tlds = {}
 
-        for k, v in unique_tlds.items(): 
+        for k, v in unique_tlds.items():
             if k in recommendations and v > 5:
                 recommended_tlds[k] = v
 
