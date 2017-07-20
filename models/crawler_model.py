@@ -455,6 +455,10 @@ class CrawlerModel():
         print "\n\n\nCrawler Stopped\n\n\n"
         return "Crawler Stopped"
 
+    def addUrls(self, session):
+        print "\n\n\n ADD URLS \n\n\n"
+        return "In Progress"
+
 
 #######################################################################################################
 # Crawler Status
@@ -507,7 +511,7 @@ class CrawlerModel():
         """
 
         domainId = session['domainId']
-        
+
         es_info = self._esInfo(domainId)
 
 
@@ -547,7 +551,7 @@ class CrawlerModel():
         recommended_tlds = {}
 
         for k, v in unique_tlds.items(): 
-            if k in recommendations:
+            if k in recommendations and v > 5:
                 recommended_tlds[k] = v
 
         return recommended_tlds
