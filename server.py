@@ -140,6 +140,7 @@ class Page(object):
 
   @cherrypy.expose
   def saveModelTags(self, session):
+    session = json.loads(session)
     res = self._crawler_model.saveModelTags(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
@@ -351,8 +352,9 @@ class Page(object):
 
   # Run Crawler
   @cherrypy.expose
-  def startCrawler(self, session, type="focused", seeds=[]):
+  def startCrawler(self, session, type="focused", seeds=""):
     session = json.loads(session)
+    seeds = self.extractListParam(seeds)
     cherrypy.response.headers["Content-Type"] = "text/plain;"
     return self._crawler_model.startCrawler(type, seeds , session)
 
