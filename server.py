@@ -60,7 +60,7 @@ class Page(object):
     res = self._domain_model.getStatus(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
-  
+
   # Returns a list of available crawlers in the format:
   # [
   #   {'id': crawlerId, 'name': crawlerName, 'creation': epochInSecondsOfFirstDownloadedURL},
@@ -85,7 +85,7 @@ class Page(object):
     res = self._domain_model.getAvailableTLDs(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(res)
-  
+
   @cherrypy.expose
   def getAvailableQueries(self, session):
     session = json.loads(session)
@@ -117,7 +117,7 @@ class Page(object):
     result = self._domain_model.getAvailableCrawledData(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(result)
-  
+
   @cherrypy.expose
   def getAnnotatedTerms(self, session):
     session = json.loads(session)
@@ -323,7 +323,7 @@ class Page(object):
   def deleteTerm(self, term, session):
     session = json.loads(session)
     self._domain_model.deleteTerm(term, session)
-  
+
   # Download the pages of uploaded urls
   @cherrypy.expose
   def uploadUrls(self, urls, tag, session):
@@ -378,7 +378,7 @@ class Page(object):
     session = json.loads(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(self._crawler_model.getRecommendations(session))
-    
+
   # Returns available dataset options.
   @cherrypy.expose
   def getAvailableDatasets(self):
