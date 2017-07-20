@@ -63,7 +63,7 @@ MAX_TEXT_LENGTH = 3000
 MAX_TERM_FREQ = 2
 MAX_LABEL_PAGES = 2000
 MAX_SAMPLE_PAGES = 500
- 
+
 class DomainModel(object):
 
   w2v = word2vec.word2vec(from_es=False)
@@ -95,7 +95,7 @@ class DomainModel(object):
     self.seedfinder = RunSeedFinder()
     self.runningSeedFinders={}
     self.extractTermsVectorizer = {}
-    
+
     self._initACHE()
 
   def _encode(self, url):
@@ -152,12 +152,12 @@ class DomainModel(object):
 
   def setCrawlerModel(self, crawlerModel):
     self._crawlerModel = crawlerModel
-  
+
   def getStatus(self, session):
     status = {}
 
     runningCrawlers = self._crawlerModel.runningCrawlers
-    
+
     if len(runningCrawlers.keys()) > 0:
       status["Crawler"] = []
       for k,v in runningCrawlers.items():
@@ -170,7 +170,7 @@ class DomainModel(object):
           elif crawler_status == "TERMINATED":
             self._crawlerModel.crawlerStopped(type, session)
             break
-            
+
     if len(self.runningSeedFinders.keys()) > 0:
       status["SeedFinder"] = []
       for k,v in self.runningSeedFinders.items():
@@ -193,7 +193,7 @@ class DomainModel(object):
       message = message + " for " + description
 
     return message
-      
+
   def getAvailableProjectionAlgorithms(self):
     return [{'name': key} for key in self.projectionsAlg.keys()]
 
@@ -239,7 +239,7 @@ class DomainModel(object):
     for k, v in get_unique_values('domain', None, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
       if "." in k:
         unique_tlds[k] = v
-    
+
     return unique_tlds
 
   def getAvailableQueries(self, session):
@@ -267,7 +267,7 @@ class DomainModel(object):
         json: {<tag>: <number of pages for the tag>}
 
     """
-    
+
     es_info = self._esInfo(session['domainId'])
 
     query = {
@@ -292,10 +292,10 @@ class DomainModel(object):
       else:
         unique_tags["Neutral"] = unique_tags["Neutral"] + 1
 
-    for tag in self._predefined_tags:    
+    for tag in self._predefined_tags:
       if unique_tags.get(tag) is None:
         unique_tags[tag] = 0
-        
+
     return unique_tags
 
   def getAvailableModelTags(self, session):
@@ -307,7 +307,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
 
     unique_tags = {}
-    
+
     query = {
       "query" : {
         "term" : {
@@ -722,7 +722,7 @@ class DomainModel(object):
 
     domainmodel_dir = data_domain + "/models/"
 
-    self.runningSeedFinders[terms] = {"domain": self._domains[domainId]['domain_name'], "status": "Starting", "description":"Query: "+terms, 'shouldTerminate': False}  
+    self.runningSeedFinders[terms] = {"domain": self._domains[domainId]['domain_name'], "status": "Starting", "description":"Query: "+terms, 'shouldTerminate': False}
 
     if (not isfile(domainmodel_dir+"pageclassifier.model")):
       self.runningSeedFinders[terms]["status"] = "Creating Model"
@@ -739,7 +739,7 @@ class DomainModel(object):
     else:
       del self.runningSeedFinders[terms]
       return "Terminated"
-      
+
     return "Starting"
 
   def stopSeedFinder(self, terms):
@@ -770,7 +770,7 @@ class DomainModel(object):
           if not self.runningSeedFinders[k]['status'] == "No relevant results":
             self.runningSeedFinders[k]['status'] = "Completed"
         break
-  
+
 #######################################################################################################
 # Annotate Content
 #######################################################################################################
@@ -884,11 +884,11 @@ class DomainModel(object):
       pages = [result[es_info['mapping']['url']][0] for result in results["results"]]
 
       print pages
-      
+
       self.setPagesTag(pages, tag, applyTagFlag, session)
-    
+
     return "Completed Process."
-  
+
   def setTermsTag(self, terms, tag, applyTagFlag, session):
     # TODO(Yamuna): Apply tag to page and update in elastic search. Suggestion: concatenate tags
     # with semi colon, removing repetitions.
@@ -987,7 +987,7 @@ class DomainModel(object):
     """
 
     start_func = time.time()
-    
+
     es_info = self._esInfo(session['domainId'])
 
     format = '%m/%d/%Y %H:%M %Z'
@@ -1003,7 +1003,7 @@ class DomainModel(object):
     }
 
     start = time.time()
-    
+
     results = multifield_term_search(s_fields, 0, self._capTerms, ['term'], self._termsIndex, 'terms', self._es)
     pos_terms = [field['term'][0] for field in results["results"]]
 
@@ -1015,7 +1015,7 @@ class DomainModel(object):
     print "\nTime to get pos and neg terms = ", end-start,"\n"
 
     start = time.time()
-    
+
     # Get selected pages displayed in the MDS window
     session["from"] = 0
     session["pagesCap"] = MAX_SAMPLE_PAGES
@@ -1026,14 +1026,14 @@ class DomainModel(object):
 
     #avg_score = fsum([result["score"] for result in results])/len(results)
     avg_score = (results[0]["score"] if results[0].get("score") is not None else -1)/2.0
-        
+
     end = time.time()
     print "\nTime to get query pages = ", end-start,"\n"
 
     top_terms = []
 
     start = time.time()
-    
+
     text = []
     if avg_score < 0:
       #No scores available
@@ -1080,7 +1080,7 @@ class DomainModel(object):
         print "\nTime to get top terms by sorting tfidf= ", end-start,"\n"
 
     start = time.time()
-    
+
     s_fields = {
       "tag": "Custom",
       "index": es_info['activeDomainIndex'],
@@ -1105,7 +1105,7 @@ class DomainModel(object):
 
     start_bar = time.time()
     start = time.time()
-    
+
     hits = term_search(es_info['mapping']['tag'], ['Relevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
     results = hits["results"]
     pos_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results}
@@ -1138,7 +1138,7 @@ class DomainModel(object):
         [total_pos_tf, pos_corpus] = tf_pos.tf(pos_text)
         self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"] = total_pos_tf
         self.extractTermsVectorizer[es_info['activeDomainIndex']]["pos_corpus"] = pos_corpus
-        
+
       total_pos_tf = np.sum(total_pos_tf, axis=0)
       total_pos = np.sum(total_pos_tf)
       total_pos_tf = total_pos_tf.flatten().tolist()[0]
@@ -1147,7 +1147,7 @@ class DomainModel(object):
     print "\n Time to vectorize pos terms = ", end-start, "\n"
 
     start = time.time()
-    
+
     hits = term_search(es_info['mapping']['tag'], ['Irrelevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
     results = hits["results"]
     neg_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results}
@@ -1185,14 +1185,14 @@ class DomainModel(object):
       total_neg_tf = np.sum(total_neg_tf, axis=0)
       total_neg = np.sum(total_neg_tf)
       total_neg_tf = total_neg_tf.flatten().tolist()[0]
-      
+
     end = time.time()
     print "\n Time to vectorize neg terms = ", end-start, "\n"
-  
+
     entry = {}
 
     start = time.time()
-    
+
     for key in top_terms + pos_terms + neg_terms + [term for term in custom_terms if term in pos_corpus or term in neg_corpus]:
       entry[key] = {"pos_freq":0, "neg_freq":0, "tag":[]}
       if key in pos_corpus:
@@ -1217,13 +1217,13 @@ class DomainModel(object):
           entry[key]["tag"].append("Negative")
       else:
         entry[key]["tag"].append("Custom")
-        
+
     end = time.time()
     print "\n Time to compte percentage in pos and neg urls = ", end-start, "\n"
-    
+
     end = time.time()
     print "\nTime to compute terms in pos and neg pages = ", end-start_bar,"\n"
-    
+
     terms = [[key, entry[key]["pos_freq"], entry[key]["neg_freq"], entry[key]["tag"]] for key in custom_terms + [term for term in pos_terms if term not in custom_terms] + [term for term in neg_terms if term not in custom_terms] + top_terms ] # + top_bigrams + top_trigrams
 
     return terms
@@ -1382,7 +1382,7 @@ class DomainModel(object):
     """
     es_info = self._esInfo(session['domainId'])
 
-    session['pagesCap'] = 12
+    #session['pagesCap'] = 12
 
     if session.get('from') is None:
       session['from'] = 0
@@ -1423,10 +1423,10 @@ class DomainModel(object):
       if not hit.get(es_info['mapping']["timestamp"]) is None:
         doc["timestamp"] = hit[es_info['mapping']["timestamp"]][0]
 
-      # To maintain order on the client  
+      # To maintain order on the client
       doc["order"] = order
       order = order + 1
-      
+
       if(not hit.get('url') is None):
         docs[hit['url'][0]] = doc
       else:
@@ -1477,7 +1477,7 @@ class DomainModel(object):
                                          es_info['activeDomainIndex'],
                                          es_info['docType'],
                                          self._es)
-        
+
         sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
         results["results"] = sorted_results
 
@@ -1492,7 +1492,7 @@ class DomainModel(object):
       query = "(" + es_info['mapping']["text"] + ":" + session['filter'].replace('"','\"') + ") OR (" + \
               es_info['mapping']["title"] + ":" + session['filter'].replace('"','\"') + ") OR (" + \
               es_info['mapping']["domain"] + ":" + session['filter'].replace('"','\"') + ")"
-              
+
     if not session['fromDate'] is None:
       s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
 
@@ -1502,7 +1502,7 @@ class DomainModel(object):
         query = "(" + field + ":" + value + ")"
       else:
         query = query + " AND " + "(" + field + ":" + value + ")"
-        
+
 
     n_criteria = session['pageRetrievalCriteria'].keys()
     n_criteria_vals = [val.split(",") for val in session['pageRetrievalCriteria'].values()]
@@ -1539,7 +1539,7 @@ class DomainModel(object):
       filtered = {}
       if not query is None:
         filtered["query"]={"query_string":{"query": query}}
-      if len(filters) > 0:  
+      if len(filters) > 0:
         filtered["filter"] = {"and":filters}
 
       if len(filtered) > 0:
@@ -1556,14 +1556,14 @@ class DomainModel(object):
 
     results = exec_query(query,
                          ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
-                         session['from'], session['pagesCap'], 
+                         session['from'], session['pagesCap'],
                          es_info['activeDomainIndex'],
                          es_info['docType'],
                          self._es)
 
     sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
     results["results"] = sorted_results
-    
+
     # if session['selected_morelike']=="moreLike":
     #   morelike_result = self._getMoreLikePagesAll(session, results['results'])
     #   hits['results'].extend(morelike_result)
@@ -1574,12 +1574,12 @@ class DomainModel(object):
 
   # def _use_rank(record):
   #   return (result.get("rank") is  None)? result["score"]: result.get("rank")
-  
+
   def _getPagesForQueries(self, session):
     es_info = self._esInfo(session['domainId'])
 
     sorting_criteria = "rank"
-    
+
     s_fields = {}
     if not session['filter'] is None:
       s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
@@ -1617,7 +1617,7 @@ class DomainModel(object):
       sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
 
     results["results"] = sorted_results
-    
+
     #TODO: Revisit when allowing selected_morelike
     # if session['selected_morelike']=="moreLike":
     #   aux_result = self._getMoreLikePagesAll(session, results)
@@ -1690,7 +1690,7 @@ class DomainModel(object):
 
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
-      
+
     results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
                                      es_info['activeDomainIndex'],
                                      es_info['docType'],
@@ -1706,7 +1706,7 @@ class DomainModel(object):
 
     s_fields = {}
     if not session['filter'] is None:
-      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]      
+      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
 
     if not session['fromDate'] is None:
       s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
@@ -1727,7 +1727,7 @@ class DomainModel(object):
                                      es_info['activeDomainIndex'],
                                      es_info['docType'],
                                      self._es)
-  
+
     sorted_results = sorted(results["results"], key=lambda result: result["score"], reverse=True)
     results["results"] = sorted_results
 
@@ -1742,7 +1742,7 @@ class DomainModel(object):
 
     s_fields = {}
     if not session['filter'] is None:
-      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]      
+      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
 
     filters=[]
     tags = session['selected_model_tags'].split(',')
@@ -1910,7 +1910,7 @@ class DomainModel(object):
                           self._es)
 
     neg_docs = results["results"]
-    
+
     neg_text = [neg_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for neg_doc in neg_docs]
     neg_ids = [neg_doc["id"] for neg_doc in neg_docs]
     neg_labels = [0 for i in range(0, len(neg_text))]
@@ -2027,14 +2027,14 @@ class DomainModel(object):
     sigmoid = self._onlineClassifiers[session['domainId']].get("sigmoid")
     if sigmoid != None:
 
-      # Select random MAX_SAMPLE 
+      # Select random MAX_SAMPLE
       filters = [{ "filter" : { "missing" : { "field" : "tag"}}, "weight": 1}]
       unlabelled_docs = random_sample(None, filters,  [es_info['mapping']['url'], es_info['mapping']['text']], MAX_SAMPLE,
                                       es_info['activeDomainIndex'],
                                       es_info['docType'],
                                       self._es)
 
-      
+
       unlabelled_docs = [unlabelled_doc for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['text']) is not None]
       unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
 
