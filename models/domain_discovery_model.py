@@ -161,11 +161,15 @@ class DomainModel(object):
       status["Crawler"] = []
       for k,v in runningCrawlers.items():
         for type, crawler_info in v.items():
-          if self._crawlerModel.getStatus(type,session):
+          crawler_status = self._crawlerModel.getStatus(type,session)
+          if crawler_status == "RUNNING":
             status["Crawler"].append({"domain": crawler_info["domain"], "status": crawler_info["status"], "description": type})
-          else:
-            status["Crawler"].append({"domain": crawler_info["domain"], "status": "Crawler Stopped", "description":type})
-
+          elif crawler_status == "STOPPING":
+            status["Crawler"].append({"domain": crawler_info["domain"], "status": "Terminating", "description":type})
+          elif crawler_status == "TERMINATED":
+            self._crawlerModel.crawlerStopped(type, session)
+            break
+            
     if len(self.runningSeedFinders.keys()) > 0:
       status["SeedFinder"] = []
       for k,v in self.runningSeedFinders.items():
