@@ -568,13 +568,13 @@ class CrawlerModel():
 
         model_tags = get_model_tags(self._es).get(domainId)
 
-        tags = None
+        tags = {}
         if model_tags is not None:
             tags = {"index": model_tags["index"]}
-        if  model_tags.get("positive") is not None:
-            tags["positive"] =  model_tags["positive"]
-        if  model_tags.get("negative") is not None:
-            tags["negative"] =  model_tags["negative"]
+            if  model_tags.get("positive") is not None:
+                tags["positive"] =  model_tags["positive"]
+            if  model_tags.get("negative") is not None:
+                tags["negative"] =  model_tags["negative"]
 
         return tags
 
