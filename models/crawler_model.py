@@ -49,7 +49,7 @@ class CrawlerModel():
             es_info["mapping"] = self._mapping
         return es_info
 
-    def _crawlerStopped(self, type, session):
+    def crawlerStopped(self, type, session):
         domainId = session["domainId"]
 
         self.runningCrawlers[domainId].pop(type)
@@ -344,7 +344,6 @@ class CrawlerModel():
         None
         """
 
-        print "\n\n\n MODEL START CRAWLER ", session, " ", type, " ", seeds, "\n\n\n"
         domainId = session['domainId']
 
         es_info = self._esInfo(domainId)
@@ -352,7 +351,7 @@ class CrawlerModel():
         if self.runningCrawlers.get(domainId) is not None:
             if self.runningCrawlers[domainId].get(type) is not None:
                 return self.runningCrawlers[domainId][type]['status']
-        elif self.getStatus(type, session):
+        elif self.getStatus(type, session) == "RUNNING":
             self.runningCrawlers[domainId] = {type: {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
             return "Running"
 
@@ -431,23 +430,26 @@ class CrawlerModel():
 
         domainId = session['domainId']
 
-        if self.getStatus(type, session):
-
-            self.runningCrawlers[domainId][type]['status'] = "Terminating"
+        if self.getStatus(type, session) == "RUNNING":
             try:
-                r = requests.post(self._servers[type]+"/stopCrawl")
+                r = requests.get(self._servers[type]+"/stopCrawl")
 
-                response = json.loads(r.text)
+                if r.status_code == 200:
+                    response = json.loads(r.text)
 
-                print "\n\nFocused Crawler Stop Response"
-                pprint(response)
-                print "\n\n"
+                    print "\n\nFocused Crawler Stop Response"
+                    pprint(response)
+                    print "\n\n"
 
-                if response["crawlerStopped"]:
-                    self._crawlerStopped(type, session)
-                else:
+                    if response["crawlerStoped"]:
+                        self.crawlerStopped(type, session)
+                    elif response["stutdownInitiated"]:
+                        self.runningCrawlers[domainId][type]['status'] = "Terminating"
+                        return "Terminating"
+                    
+                elif r.status_code == 404 or r.status_code == 500:
                     return "Failed to stop crawler"
-
+                
             except ConnectionError:
                 print "\n\nFailed to connect to server to stop crawler. Server may not be running\n\n"
                 return "Failed to connect to server. Server may not be running"
@@ -471,14 +473,14 @@ class CrawlerModel():
         try:
             r = requests.get(self._servers[type]+"/status")
 
-            print "\n\n ACHE server status response code: ", r.status_code, "\n\n"
+            print "\n\n ACHE server status response code: ", r.status_code
 
             if r.status_code == 200:
                 response = json.loads(r.text)
-            elif r.status_code == 404:
+            elif r.status_code == 404 or r.status_code == 500:
                 try:
                     self.runningCrawlers[domainId][type]['status'] = "Failed to get status from server"
-                    self._crawlerStopped(type, session)
+                    self.crawlerStopped(type, session)
                     return False
                 except KeyError:
                     return False
@@ -492,7 +494,7 @@ class CrawlerModel():
             except KeyError:
                 return False
 
-        return response["crawlerRunning"]
+        return response["crawlerState"]
 
 ##########################a#############################################################################
 # Recommendations
