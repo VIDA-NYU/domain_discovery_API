@@ -343,7 +343,8 @@ class CrawlerModel():
         Returns:
         None
         """
-        
+
+        print "\n\n\n MODEL START CRAWLER ", session, " ", type, " ", seeds, "\n\n\n"
         domainId = session['domainId']
 
         es_info = self._esInfo(domainId)
@@ -564,9 +565,9 @@ class CrawlerModel():
         Returns:
         {"index": <name of index of domain>, "positive": [], "negative": []}
         """
-        
+
         model_tags = get_model_tags(self._es).get(domainId)
-        
+
         tags = None
         if model_tags is not None:
             tags = {"index": model_tags["index"]}
@@ -606,29 +607,23 @@ class CrawlerModel():
 
         model_tags = self.getModelTags(domainId)
 
-        prev_pos_tags = model_tags.get("positive")
-        
-        if prev_pos_tags is None or not prev_pos_tags or len(set(pos_tags).intersection(set(prev_pos_tags))) != len(pos_tags):
-            entry = {
-                domainId: {
-                    "positive": pos_tags,
-                    "index":  es_info["activeDomainIndex"]
-                }
+        entry = {
+            domainId: {
+                "positive": pos_tags,
+                "index":  es_info["activeDomainIndex"]
             }
-            
-            update_document(entry, "config", "model_tags", self._es)
+        }
+        
+        update_document(entry, "config", "model_tags", self._es)
 
-        prev_neg_tags = model_tags.get("negative")
-        
-        if prev_neg_tags is None or not prev_neg_tags or len(set(neg_tags).intersection(set(prev_neg_tags))) != len(neg_tags):
-            entry = {
-                domainId: {
-                    "negative": neg_tags,
-                    "index":  es_info["activeDomainIndex"]
-                }
+        entry = {
+            domainId: {
+                "negative": neg_tags,
+                "index":  es_info["activeDomainIndex"]
             }
-            
-            update_document(entry, "config", "model_tags", self._es)
+        }
+        
+        update_document(entry, "config", "model_tags", self._es)
                         
         
         
