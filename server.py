@@ -365,12 +365,19 @@ class Page(object):
     cherrypy.response.headers["Content-Type"] = "text/plain;"
     return self._crawler_model.stopCrawler(type, session)
 
+  # Add urls while crawling
+  @cherrypy.expose
+  def addUrls(self, session, seeds=""):
+    session = json.loads(session)
+    cherrypy.response.headers["Content-Type"] = "text/plain;"
+    return self._crawler_model.addUrls(session)
+
   # Get recommendations for deep crawling
   @cherrypy.expose
   def getRecommendations(self, session):
     session = json.loads(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
-    return self._crawler_model.getRecommendations(session)
+    return json.dumps(self._crawler_model.getRecommendations(session))
     
   # Returns available dataset options.
   @cherrypy.expose
