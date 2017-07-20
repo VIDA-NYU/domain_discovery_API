@@ -437,7 +437,7 @@ class CrawlerModel():
                 if r.status_code == 200:
                     response = json.loads(r.text)
 
-                    print "\n\nFocused Crawler Stop Response"
+                    print "\n\n",type," Crawler Stop Response"
                     pprint(response)
                     print "\n\n"
 
