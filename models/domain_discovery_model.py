@@ -861,6 +861,33 @@ class DomainModel(object):
 
     return "Completed Process."
 
+  def setDomainsTag(self, tlds, tag, applyTagFlag, session):
+    """ Tag the pages of a domain with the given tag which can be a custom tag or 'Relevant'/'Irrelevant' which indicate relevance or irrelevance to the domain of interest. Tags help in clustering and categorizing the pages. They also help build computational models of the domain.
+
+    Parameters:
+        domains (tlds): list of domains to apply tag
+        tag (string): custom tag, 'Relevant', 'Irrelevant'
+        applyTagFlag (bool): True - Add tag, False - Remove tag
+        session (json): Should contain domainId
+
+    Returns:
+       Returns string "Completed Process"
+
+    """
+
+    es_info = self._esInfo(session['domainId'])
+
+    for tld in tlds:
+      results = term_search('domain', [tld], 0, self._all, es_info['mapping']['url'], es_info['activeDomainIndex'], es_info['docType'],  self._es)
+
+      pages = [result[es_info['mapping']['url']][0] for result in results["results"]]
+
+      print pages
+      
+      self.setPagesTag(pages, tag, applyTagFlag, session)
+    
+    return "Completed Process."
+  
   def setTermsTag(self, terms, tag, applyTagFlag, session):
     # TODO(Yamuna): Apply tag to page and update in elastic search. Suggestion: concatenate tags
     # with semi colon, removing repetitions.

@@ -295,6 +295,18 @@ class Page(object):
     self.lock.release()
     return output
 
+  # Adds tag to pages (if applyTagFlag is True) or removes tag from pages (if applyTagFlag is
+  # False).
+  @cherrypy.expose
+  def setDomainsTag(self, tlds, tag, applyTagFlag, session):
+    session = json.loads(session)
+    tlds = Page.extractListParam(tlds)
+    applyTagFlag = Page.extractBooleanParam(applyTagFlag)
+    self.lock.acquire()
+    output = self._domain_model.setDomainsTag(tlds, tag, applyTagFlag, session)
+    self.lock.release()
+    return output
+  
 
   # Adds tag to terms (if applyTagFlag is True) or removes tag from terms (if applyTagFlag is
   # False).
