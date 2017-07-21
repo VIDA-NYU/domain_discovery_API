@@ -500,7 +500,7 @@ class CrawlerModel():
 # Recommendations
 #######################################################################################################
 
-    def getRecommendations(self, session):
+    def getRecommendations(self, num_pages, session):
         """ Method to recommend tlds for deep crawling. These are tlds in the crawled relevant pages
         which have not yet been marked for deep crawl and are sorted by the number of relevant urls
         in the tld that were crawled.
@@ -528,7 +528,7 @@ class CrawlerModel():
 
         unique_tlds = {}
 
-        for k, v in get_unique_values('domain', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+        for k, v in get_unique_values('domain.exact', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
             if "." in k:
                 unique_tlds[k] = v
 
@@ -543,17 +543,16 @@ class CrawlerModel():
 
         unique_dp_tlds = {}
 
-        for k, v in get_unique_values('domain', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
-            if "." in k:
-                unique_dp_tlds[k] = v
+        for k, v in get_unique_values('domain.exact', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+            unique_dp_tlds[k] = v
 
-        #Get tlds that are not alreadt annotated deep crawl
+        #Get tlds that are not already annotated deep crawl
         recommendations = list(set(unique_tlds.keys()).difference(set(unique_dp_tlds.keys())))
-
+        
         recommended_tlds = {}
 
         for k, v in unique_tlds.items(): 
-            if k in recommendations and v > 5:
+            if k in recommendations and v >= int(num_pages):
                 recommended_tlds[k] = v
 
         return recommended_tlds
