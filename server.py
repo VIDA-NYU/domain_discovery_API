@@ -386,10 +386,10 @@ class Page(object):
 
   # Get recommendations for deep crawling
   @cherrypy.expose
-  def getRecommendations(self, session):
+  def getRecommendations(self, session, minCount=3):
     session = json.loads(session)
     cherrypy.response.headers["Content-Type"] = "application/json;"
-    return json.dumps(self._crawler_model.getRecommendations(session))
+    return json.dumps(self._crawler_model.getRecommendations(minCount, session))
 
   # Returns available dataset options.
   @cherrypy.expose
