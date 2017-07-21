@@ -236,7 +236,7 @@ class DomainModel(object):
 
     unique_tlds = {}
 
-    for k, v in get_unique_values('domain', None, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+    for k, v in get_unique_values('domain.exact', None, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
       if "." in k:
         unique_tlds[k] = v
 
@@ -882,8 +882,6 @@ class DomainModel(object):
       results = term_search('domain', [tld], 0, self._all, es_info['mapping']['url'], es_info['activeDomainIndex'], es_info['docType'],  self._es)
 
       pages = [result[es_info['mapping']['url']][0] for result in results["results"]]
-
-      print pages
 
       self.setPagesTag(pages, tag, applyTagFlag, session)
 
