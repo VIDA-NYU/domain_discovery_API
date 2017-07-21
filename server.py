@@ -381,8 +381,9 @@ class Page(object):
   @cherrypy.expose
   def addUrls(self, session, seeds=""):
     session = json.loads(session)
+    seeds = self.extractListParam(seeds)
     cherrypy.response.headers["Content-Type"] = "text/plain;"
-    return self._crawler_model.addUrls(session)
+    return self._crawler_model.addUrls(seeds, session)
 
   # Get recommendations for deep crawling
   @cherrypy.expose
