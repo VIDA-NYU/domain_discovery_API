@@ -792,7 +792,7 @@ class DomainModel(object):
 
     entries = {}
     results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
-
+    
     if applyTagFlag and len(results) > 0:
       print '\n\napplied tag ' + tag + ' to pages' + str(pages) + '\n\n'
 
@@ -1431,7 +1431,8 @@ class DomainModel(object):
           if imageURL is not None:
             docs[image_desc_hit['url'][0]]['image_url'] = imageURL
 
-          desc = getDescription(image_desc_hit["html"][0], image_desc_hit['text'][0])
+          text = image_desc_hit['text'][0] if image_desc_hit.get('text') is not None else ""
+          desc = getDescription(image_desc_hit["html"][0], text)
           if desc is not None:
             docs[image_desc_hit['url'][0]]['snippet'] =  " ".join(desc.split(" ")[0:20])
 
