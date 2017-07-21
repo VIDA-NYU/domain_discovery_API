@@ -441,9 +441,9 @@ class CrawlerModel():
                     pprint(response)
                     print "\n\n"
 
-                    if response["crawlerStoped"]:
+                    if response["crawlerStopped"]:
                         self.crawlerStopped(type, session)
-                    elif response["stutdownInitiated"]:
+                    elif response["shutdownInitiated"]:
                         self.runningCrawlers[domainId][type]['status'] = "Terminating"
                         return "Terminating"
 
@@ -457,9 +457,30 @@ class CrawlerModel():
         print "\n\n\nCrawler Stopped\n\n\n"
         return "Crawler Stopped"
 
-    def addUrls(self, session):
-        print "\n\n\n ADD URLS \n\n\n"
-        return "In Progress"
+    def addUrls(self, seeds, session):
+        domainId = session['domainId']
+
+        if self.getStatus('deep', session) == "RUNNING":
+            try:
+                payload = {"seeds": seeds}
+                r = requests.post(self._servers['deep']+"/seeds", data=json.dumps(payload))
+
+                if r.status_code == 200:
+                    response = json.loads(r.text)
+
+                    print "\n\n",type," Crawler Stop Response"
+                    pprint(response)
+                    print "\n\n"
+
+                elif r.status_code == 404 or r.status_code == 500:
+                    return "Failed to add urls"
+
+            except ConnectionError:
+                print "\n\nFailed to connect to server to add urls. Server may not be running\n\n"
+                return "Failed to connect to server. Server may not be running"
+
+        print "\n\n\nUrls Added\n\n\n"
+        return "Urls Added"
 
 
 #######################################################################################################
