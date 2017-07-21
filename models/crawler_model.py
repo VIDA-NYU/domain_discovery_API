@@ -97,8 +97,9 @@ class CrawlerModel():
             for filename in listdir(data_negative):
                 remove(data_negative+filename)
 
-        pos_tags = "Relevant"
-        neg_tags = "Irrelevant"
+        pos_tags = ["Relevant"]
+        neg_tags = ["Irrelevant"]
+
         try:
             pos_tags = session['model']['positive']
         except KeyError:
@@ -110,7 +111,8 @@ class CrawlerModel():
             print "Using default negative tags"
 
         pos_docs = []
-        for tag in pos_tags.split(','):
+
+        for tag in pos_tags: #.split(','):
             s_fields = {}
             query = {
                 "wildcard": {es_info['mapping']["tag"]:tag}
@@ -129,7 +131,7 @@ class CrawlerModel():
         pos_html = {field['url'][0]:field[es_info['mapping']["html"]][0] for field in pos_docs}
 
         neg_docs = []
-        for tag in neg_tags.split(','):
+        for tag in neg_tags: #.split(','):
             s_fields = {}
             query = {
                 "wildcard": {es_info['mapping']["tag"]:tag}
@@ -362,7 +364,7 @@ class CrawlerModel():
             domainoutput_dir = data_domain + "/output/"
 
             if (not isdir(domainmodel_dir)):
-                self._crawlerModel.createModel(session, zip=True)
+                self.createModel(session, zip=True)
             if (not isdir(domainmodel_dir)):
                 return "No domain model available"
 
@@ -441,21 +443,46 @@ class CrawlerModel():
                     pprint(response)
                     print "\n\n"
 
-                    if response["crawlerStoped"]:
+                    if response["crawlerStopped"]:
                         self.crawlerStopped(type, session)
-                    elif response["stutdownInitiated"]:
+                    elif response["shutdownInitiated"]:
                         self.runningCrawlers[domainId][type]['status'] = "Terminating"
                         return "Terminating"
-                    
+
                 elif r.status_code == 404 or r.status_code == 500:
                     return "Failed to stop crawler"
-                
+
             except ConnectionError:
                 print "\n\nFailed to connect to server to stop crawler. Server may not be running\n\n"
                 return "Failed to connect to server. Server may not be running"
 
         print "\n\n\nCrawler Stopped\n\n\n"
         return "Crawler Stopped"
+
+    def addUrls(self, seeds, session):
+        domainId = session['domainId']
+
+        if self.getStatus('deep', session) == "RUNNING":
+            try:
+                payload = {"seeds": seeds}
+                r = requests.post(self._servers['deep']+"/seeds", data=json.dumps(payload))
+
+                if r.status_code == 200:
+                    response = json.loads(r.text)
+
+                    print "\n\n",type," Crawler Stop Response"
+                    pprint(response)
+                    print "\n\n"
+
+                elif r.status_code == 404 or r.status_code == 500:
+                    return "Failed to add urls"
+
+            except ConnectionError:
+                print "\n\nFailed to connect to server to add urls. Server may not be running\n\n"
+                return "Failed to connect to server. Server may not be running"
+
+        print "\n\n\nUrls Added\n\n\n"
+        return "Urls Added"
 
 
 #######################################################################################################
@@ -496,7 +523,7 @@ class CrawlerModel():
 # Recommendations
 #######################################################################################################
 
-    def getRecommendations(self, session):
+    def getRecommendations(self, num_pages, session):
         """ Method to recommend tlds for deep crawling. These are tlds in the crawled relevant pages
         which have not yet been marked for deep crawl and are sorted by the number of relevant urls
         in the tld that were crawled.
@@ -509,7 +536,7 @@ class CrawlerModel():
         """
 
         domainId = session['domainId']
-        
+
         es_info = self._esInfo(domainId)
 
 
@@ -524,7 +551,7 @@ class CrawlerModel():
 
         unique_tlds = {}
 
-        for k, v in get_unique_values('domain', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+        for k, v in get_unique_values('domain.exact', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
             if "." in k:
                 unique_tlds[k] = v
 
@@ -539,17 +566,16 @@ class CrawlerModel():
 
         unique_dp_tlds = {}
 
-        for k, v in get_unique_values('domain', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
-            if "." in k:
-                unique_dp_tlds[k] = v
+        for k, v in get_unique_values('domain.exact', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+            unique_dp_tlds[k] = v
 
-        #Get tlds that are not alreadt annotated deep crawl
+        #Get tlds that are not already annotated deep crawl
         recommendations = list(set(unique_tlds.keys()).difference(set(unique_dp_tlds.keys())))
-
+        
         recommended_tlds = {}
 
-        for k, v in unique_tlds.items():
-            if k in recommendations:
+        for k, v in unique_tlds.items(): 
+            if k in recommendations and v >= int(num_pages):
                 recommended_tlds[k] = v
 
         return recommended_tlds
