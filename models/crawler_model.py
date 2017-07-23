@@ -10,6 +10,7 @@ import json
 from zipfile import ZipFile
 
 from elastic.search_documents import multifield_term_search
+from elastic.misc_queries import exec_query
 from elastic.aggregations import get_unique_values
 from elastic.get_config import get_available_domains, get_model_tags
 from elastic.config import es
@@ -28,6 +29,7 @@ class CrawlerModel():
         self._path = path
         self._all = 100000
         self._es = es
+        self._termsIndex = "ddt_terms"
         self.runningCrawlers={}
         self._domains = get_available_domains(self._es)
         self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain", "title":"title"}
@@ -216,6 +218,9 @@ class CrawlerModel():
         Zip file url or message text
         """
 
+        if len(terms) == 0:
+            return "Model not created"
+
         path = self._path
 
         es_info = self._esInfo(session["domainId"])
@@ -223,30 +228,6 @@ class CrawlerModel():
         data_dir = path + "/data/"
         data_domain  = data_dir + es_info['activeDomainIndex']
         domainmodel_dir = data_domain + "/models/"
-
-        #If no terms are provided then use the annotated and uploaded terms
-        if len(terms) == 0:
-            s_fields = {
-                "index": es_info['activeDomainIndex'],
-                "doc_type": es_info['docType']
-            }
-
-            s_fields["filter"] = { "query":
-                                   {
-                                       "query_string":
-                                       {
-                                           "default_field": "tag",
-                                           "query": "Positive"
-                                       }
-                                   }
-            }
-            results = multifield_term_search(s_fields,
-                                             0, self._all,
-                                             ["term"],
-                                             "ddt_terms",
-                                             "terms",
-                                             self._es)
-            terms = [result["term"][0] for result in results["results"]]
 
         #Generate patterns from terms
         with open( domainmodel_dir+"/pageclassifier.yml", "w") as pc_f:
@@ -335,7 +316,7 @@ class CrawlerModel():
 # Run Crawler
 #######################################################################################################
 
-    def startCrawler(self, type, seeds, session):
+    def startCrawler(self, type, seeds, terms, session):
         """ Start the ACHE crawler for the specfied domain with the domain model. The
         results are stored in the same index
 
@@ -363,8 +344,15 @@ class CrawlerModel():
             domainmodel_dir = data_domain + "/models/"
             domainoutput_dir = data_domain + "/output/"
 
-            if (not isdir(domainmodel_dir)):
-                self.createModel(session, zip=True)
+            result = self.createModel(session, zip=True)
+            if "No irrelevant pages to build domain model" in result:
+                if len(terms) > 0:
+                    result = self.createRegExModel(terms, session, zip=True)
+                    if "Model not created" in result:
+                        return "No domain model available"
+                else:
+                    return "No domain model available"
+                
             if (not isdir(domainmodel_dir)):
                 return "No domain model available"
 
@@ -512,7 +500,7 @@ class CrawlerModel():
             print "\n\nFailed to connect to server for status. Server may not be running\n\n"
             try:
                 self.runningCrawlers[domainId][type]['status'] = "Failed to connect to server for status. Server may not be running"
-                self._crawlerStopped(type, session)
+                self.crawlerStopped(type, session)
                 return False
             except KeyError:
                 return False
@@ -539,21 +527,76 @@ class CrawlerModel():
 
         es_info = self._esInfo(domainId)
 
-
-        #Get tlds in crawled relevant pages
-        query = {
-            "term": {
-                "isRelevant": {
-                    "value": "relevant"
-                }
-            }
+        s_fields = {
+            "tag": "Positive",
+            "index": es_info['activeDomainIndex'],
+            "doc_type": es_info['docType']
         }
+
+        results = multifield_term_search(s_fields, 0, self._all, ['term'], self._termsIndex, 'terms', self._es)
+        pos_terms = [field['term'][0] for field in results["results"]]
 
         unique_tlds = {}
 
-        for k, v in get_unique_values('domain.exact', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
-            if "." in k:
-                unique_tlds[k] = v
+        if len(pos_terms) > 0:
+            mm_queries = []
+            for term in pos_terms:
+                mm_queries.append({'multi_match': {
+                    'query': term,
+                    'fields': [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"],
+                    'type': 'cross_fields',
+                    'operator': 'and'
+                }})
+            query = {
+                'query':{
+                    'bool':{
+                        'must_not':{
+                            'term': {'isRelevant': 'irrelevant' }
+                        },
+                        'should': mm_queries,
+                        "minimum_number_should_match": 1
+                    }
+                }
+            }
+            
+            results = exec_query(query,
+                                 ['url', 'domain'],
+                                 0, self._all,
+                                 es_info['activeDomainIndex'],
+                                 es_info['docType'],
+                                 self._es)
+            
+            domain_scored_pages = {}
+            for result in results['results']:
+                if result.get('domain') is None:
+                    continue
+                domain = result['domain'][0]
+                domain_info = domain_scored_pages.get(domain)
+                if domain_info is not None:
+                    domain_info[0] = domain_info[0] + result['score']
+                    domain_info[1] = domain_info[1] + 1
+                    domain_info[2] = domain_info[0] / float(domain_info[1])
+                else:
+                    domain_info = [result['score'], 1, result['score']]
+                    
+                domain_scored_pages[domain] = domain_info
+
+            unique_tlds = {k.replace('www.', ''):{'count':v[1],'score':v[2]} for k,v in domain_scored_pages.items()}
+            
+        else:    
+            
+            #Get tlds in crawled relevant pages
+            query = {
+                "term": {
+                    "isRelevant": {
+                        "value": "relevant"
+                    }
+                }
+            }
+
+            for k, v in get_unique_values('domain.exact', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
+                if "." in k:
+                    unique_tlds[k.replace('www.', '')] = {'count':v}
 
         #Get tlds in pages annotated deep crawl
         query = {
@@ -567,17 +610,17 @@ class CrawlerModel():
         unique_dp_tlds = {}
 
         for k, v in get_unique_values('domain.exact', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
-            unique_dp_tlds[k] = v
+            unique_dp_tlds[k.replace("www.","")] = v
 
         #Get tlds that are not already annotated deep crawl
         recommendations = list(set(unique_tlds.keys()).difference(set(unique_dp_tlds.keys())))
-        
+
         recommended_tlds = {}
 
         for k, v in unique_tlds.items(): 
-            if k in recommendations and v >= int(num_pages):
+            if k in recommendations and v['count'] >= int(num_pages):
                 recommended_tlds[k] = v
-
+                
         return recommended_tlds
 
 ##########################a#############################################################################
