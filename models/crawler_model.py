@@ -1,5 +1,7 @@
 from os.path import isfile, join, exists, isdir
 from os import chdir, listdir, environ, makedirs, rename, chmod, walk, remove
+import linecache
+from sys import exc_info
 
 from subprocess import Popen
 from subprocess import PIPE
