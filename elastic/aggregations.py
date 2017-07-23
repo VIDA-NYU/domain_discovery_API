@@ -50,8 +50,8 @@ def get_unique_values(field, query, size, es_index='memex', es_doc_type='page', 
 
     if query is not None:
         query_body["query"] = query
-        
-    res = es.search(body=query_body, index=es_index, doc_type=es_doc_type, request_timeout=30)
+
+    res = es.search(body=query_body, index=es_index, doc_type=es_doc_type, request_timeout=100)
 
     return {item['key']:item['doc_count'] for item in res['aggregations']['unique_values']['buckets']}
     
