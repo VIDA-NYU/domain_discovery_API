@@ -53,6 +53,9 @@ class CrawlerModel():
             es_info["mapping"] = self._mapping
         return es_info
 
+    def getCrawlerServers(self):
+        return self._servers
+    
     def updateDomains(self):
         self._domains = get_available_domains(self._es)
 

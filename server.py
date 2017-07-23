@@ -393,6 +393,12 @@ class Page(object):
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(self._crawler_model.getRecommendations(minCount, session))
 
+  # Get servers for focused and deep crawling for deep crawling
+  @cherrypy.expose
+  def getCrawlerServers(self):
+    cherrypy.response.headers["Content-Type"] = "application/json;"
+    return json.dumps(self._crawler_model.getCrawlerServers())
+
   # Returns available dataset options.
   @cherrypy.expose
   def getAvailableDatasets(self):
