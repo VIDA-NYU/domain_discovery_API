@@ -1044,7 +1044,7 @@ class DomainModel(object):
 
     if(len(url_ids) > 0):
       results = get_documents_by_id(url_ids, [es_info['mapping']["url"], es_info['mapping']["text"]], es_info["activeDomainIndex"], es_info["docType"], self._es)
-      results = {hit[es_info['mapping']["url"]][0]: " ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results if hit[es_info['mapping']["text"]][0] != ""}
+      results = {hit[es_info['mapping']["url"]][0]: " ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results if hit.get(es_info['mapping']["text"]) is not None  and hit[es_info['mapping']["text"]][0] != ""}
 
       urls = results.keys()
       text = results.values()
