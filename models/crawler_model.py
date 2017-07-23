@@ -51,6 +51,9 @@ class CrawlerModel():
             es_info["mapping"] = self._mapping
         return es_info
 
+    def updateDomains(self):
+        self._domains = get_available_domains(self._es)
+
     def crawlerStopped(self, type, session):
         domainId = session["domainId"]
 

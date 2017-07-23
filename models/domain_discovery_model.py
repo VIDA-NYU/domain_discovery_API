@@ -513,6 +513,8 @@ class DomainModel(object):
 
     load_config([entry])
 
+    self._crawlerModel.updateDomains()
+
   # Delete domain
   def delDomain(self, domains):
 
@@ -532,7 +534,8 @@ class DomainModel(object):
     # Delete indices from config index
     delete_document(domains.keys(), "config", "domains", self._es)
 
-
+    self._crawlerModel.updateDomains()
+    
   def updateColors(self, session, colors):
     es_info = self._esInfo(session['domainId'])
 
