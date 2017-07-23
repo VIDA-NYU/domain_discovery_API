@@ -225,7 +225,7 @@ class CrawlerModel():
         Returns:
         Zip file url or message text
         """
-
+        
         if len(terms) == 0:
             return "Model not created"
 
@@ -357,9 +357,9 @@ class CrawlerModel():
                 if len(terms) > 0:
                     result = self.createRegExModel(terms, session, zip=True)
                     if "Model not created" in result:
-                        return "No domain model available"
+                        return "No regex domain model available"
                 else:
-                    return "No domain model available"
+                    return "No page classifier or regex domain model available"
                 
             if (not isdir(domainmodel_dir)):
                 return "No domain model available"
