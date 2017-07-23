@@ -107,9 +107,10 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
 
     query = {}
     queries = []
+    match_queries = []
     filter_q = None
     sort_q = None
-    
+
     for k,v in s_fields.items():
         if "queries" in k:
             queries.extend(v)
@@ -127,7 +128,7 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
                         "operator": "and"
                     }
                 }
-                queries.append(match_query)
+                match_queries.append(match_query)
         else:
             match_query = {
                 "match": {
@@ -142,8 +143,8 @@ def multifield_term_search(s_fields, start=0, pageCount=100, fields=[], es_index
 
     query["query"] =  {
             "bool": {
-                "should": queries,
-                "minimum_number_should_match": len(queries)
+                "must": queries,
+                "should": match_queries
             }
         }
     query["fields"] = fields
