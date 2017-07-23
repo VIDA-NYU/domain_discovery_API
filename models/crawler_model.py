@@ -587,16 +587,13 @@ class CrawlerModel():
             unique_tlds = {k.replace('www.', ''):{'count':v[1],'score':v[2]} for k,v in domain_scored_pages.items()}
             
         else:    
-            
-            #Get tlds in crawled relevant pages
             query = {
-                "term": {
-                    "isRelevant": {
-                        "value": "relevant"
+                'bool':{
+                    'must_not':{
+                        'term': {'isRelevant': 'irrelevant' }
                     }
                 }
             }
-
             for k, v in get_unique_values('domain.exact', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
                 if "." in k:
                     unique_tlds[k.replace('www.', '')] = {'count':v}
