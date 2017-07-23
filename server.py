@@ -364,11 +364,12 @@ class Page(object):
 
   # Run Crawler
   @cherrypy.expose
-  def startCrawler(self, session, type="focused", seeds=""):
+  def startCrawler(self, session, type="focused", seeds="", terms=""):
     session = json.loads(session)
     seeds = self.extractListParam(seeds)
+    terms = self.extractListParam(terms)
     cherrypy.response.headers["Content-Type"] = "text/plain;"
-    return self._crawler_model.startCrawler(type, seeds , session)
+    return self._crawler_model.startCrawler(type, seeds , terms, session)
 
   # Stop Crawler
   @cherrypy.expose
