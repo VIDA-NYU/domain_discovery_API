@@ -1469,7 +1469,12 @@ class DomainModel(object):
         s_fields = {}
         if not session['fromDate'] is None:
           es_info['mapping']["timestamp"] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
-        s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
+
+        or_terms = session['filter'].split('OR')
+        match_queries = []
+        for term in or_terms:
+          match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+        s_fields['multi_match'] = match_queries
         results = multifield_term_search(s_fields,
                                          session['from'], session['pagesCap'],
                                          ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
@@ -1581,7 +1586,12 @@ class DomainModel(object):
 
     s_fields = {}
     if not session['filter'] is None:
-      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
+      or_terms = session['filter'].split('OR')
+      match_queries = []
+      for term in or_terms:
+        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+      s_fields['multi_match'] = match_queries
+
       sorting_criteria = "score"
     else:
       s_fields["sort"] = [{
@@ -1631,7 +1641,12 @@ class DomainModel(object):
 
     s_fields = {}
     if not session['filter'] is None:
-      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
+      or_terms = session['filter'].split('OR')
+      match_queries = []
+      for term in or_terms:
+        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+      s_fields['multi_match'] = match_queries
+
 
     if not session['fromDate'] is None:
       s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
@@ -1669,7 +1684,12 @@ class DomainModel(object):
 
     s_fields = {}
     if not session['filter'] is None:
-      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
+      or_terms = session['filter'].split('OR')
+      match_queries = []
+      for term in or_terms:
+        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+      s_fields['multi_match'] = match_queries
+
 
     if not session['fromDate'] is None:
       s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
@@ -1705,7 +1725,12 @@ class DomainModel(object):
 
     s_fields = {}
     if not session['filter'] is None:
-      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
+      or_terms = session['filter'].split('OR')
+      match_queries = []
+      for term in or_terms:
+        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+      s_fields['multi_match'] = match_queries
+
 
     if not session['fromDate'] is None:
       s_fields[es_info['mapping']["timestamp"]] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
@@ -1741,7 +1766,12 @@ class DomainModel(object):
 
     s_fields = {}
     if not session['filter'] is None:
-      s_fields['multi_match'] = [[session['filter'].replace('"','\"'), [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]]]
+      or_terms = session['filter'].split('OR')
+      match_queries = []
+      for term in or_terms:
+        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+      s_fields['multi_match'] = match_queries
+
 
     filters=[]
     tags = session['selected_model_tags'].split(',')
