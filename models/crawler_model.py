@@ -394,7 +394,10 @@ class CrawlerModel():
                 print "\n\n"
 
                 if response["crawlerStarted"]:
-                    self.runningCrawlers[domainId] = {type: {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
+                    if self.runningCrawlers.get(domainId) is None:
+                        self.runningCrawlers[domainId] = {type: {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
+                    else:
+                        self.runningCrawlers[domainId][type] = {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }
                     return "Running"
                 else:
                     return "Failed to run crawler"
@@ -417,7 +420,10 @@ class CrawlerModel():
                 print "\n\n"
 
                 if response["crawlerStarted"]:
-                    self.runningCrawlers[domainId] = {type: {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
+                    if self.runningCrawlers.get(domainId) is None:
+                        self.runningCrawlers[domainId] = {type: {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
+                    else:
+                        self.runningCrawlers[domainId][type] = {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }
                     return "Running"
                 else:
                     return "Failed to run crawler"
