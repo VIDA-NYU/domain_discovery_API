@@ -306,7 +306,7 @@ class Page(object):
     output = self._domain_model.setDomainsTag(tlds, tag, applyTagFlag, session)
     self.lock.release()
     return output
-  
+
 
   # Adds tag to terms (if applyTagFlag is True) or removes tag from terms (if applyTagFlag is
   # False).
@@ -359,7 +359,6 @@ class Page(object):
   @cherrypy.expose
   def createModel(self, session):
     session = json.loads(session)
-    esInfo = self._domain_model.esInfo(session["domainId"])
     return self._crawler_model.createModel(session)
 
   # Run Crawler
