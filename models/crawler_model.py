@@ -194,6 +194,11 @@ class CrawlerModel():
 
         if (not isdir(domainmodel_dir)):
             makedirs(domainmodel_dir)
+        else:
+            # Remove all previous files
+            for filename in listdir(domainmodel_dir):
+                remove(domainmodel_dir+filename)
+
 
         if len(neg_docs) > 0:
             ache_home = environ['ACHE_HOME']
@@ -236,6 +241,13 @@ class CrawlerModel():
         data_dir = path + "/data/"
         data_domain  = data_dir + es_info['activeDomainIndex']
         domainmodel_dir = data_domain + "/models/"
+
+        if (not isdir(domainmodel_dir)):
+            makedirs(domainmodel_dir)
+        else:
+            # Remove all previous files
+            for filename in listdir(domainmodel_dir):
+                remove(domainmodel_dir+filename)
 
         #Generate patterns from terms
         with open( domainmodel_dir+"/pageclassifier.yml", "w") as pc_f:
@@ -352,6 +364,7 @@ class CrawlerModel():
             domainmodel_dir = data_domain + "/models/"
             domainoutput_dir = data_domain + "/output/"
 
+            
             result = self.createModel(session, zip=True)
             if "No irrelevant pages to build domain model" in result:
                 if len(terms) > 0:
@@ -589,7 +602,7 @@ class CrawlerModel():
                     
                 domain_scored_pages[domain] = domain_info
 
-            unique_tlds = {k.replace('www.', ''):{'count':v[1],'score':v[2]} for k,v in domain_scored_pages.items()}
+            unique_tlds = {k:{'count':v[1],'score':v[2]} for k,v in domain_scored_pages.items()}
             
         else:    
             query = {
@@ -601,7 +614,7 @@ class CrawlerModel():
             }
             for k, v in get_unique_values('domain.exact', query, self._all, es_info['activeDomainIndex'], es_info['docType'], self._es).items():
                 if "." in k:
-                    unique_tlds[k.replace('www.', '')] = {'count':v}
+                    unique_tlds[k] = {'count':v}
 
         #Get tlds in pages annotated deep crawl
         query = {
@@ -618,7 +631,7 @@ class CrawlerModel():
             unique_dp_tlds[k.replace("www.","")] = v
 
         #Get tlds that are not already annotated deep crawl
-        recommendations = list(set(unique_tlds.keys()).difference(set(unique_dp_tlds.keys())))
+        recommendations = list(set([k.replace('www.','') for k in unique_tlds.keys()]).difference(set(unique_dp_tlds.keys())))
 
         recommended_tlds = {}
 
