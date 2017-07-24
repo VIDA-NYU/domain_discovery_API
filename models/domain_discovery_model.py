@@ -1132,17 +1132,21 @@ class DomainModel(object):
           [total_pos_tf, pos_corpus] = tf_pos.tf(pos_text)
           self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"] = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"].vstack(total_pos_tf)
         else:
-          total_pos_tf = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"]
-          pos_corpus = self.extractTermsVectorizer[es_info['activeDomainIndex']]["pos_corpus"]
+          if self.extractTermsVectorizer[es_info['activeDomainIndex']].get("total_pos_tf") is not None:
+            total_pos_tf = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"]
+            pos_corpus = self.extractTermsVectorizer[es_info['activeDomainIndex']]["pos_corpus"]
+          else:
+            pos_corpus= []
       else:
         self.extractTermsVectorizer[es_info['activeDomainIndex']] = {"pos":tf_pos, "pos_urls":pos_urls}
         [total_pos_tf, pos_corpus] = tf_pos.tf(pos_text)
         self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_pos_tf"] = total_pos_tf
         self.extractTermsVectorizer[es_info['activeDomainIndex']]["pos_corpus"] = pos_corpus
 
-      total_pos_tf = np.sum(total_pos_tf, axis=0)
-      total_pos = np.sum(total_pos_tf)
-      total_pos_tf = total_pos_tf.flatten().tolist()[0]
+      if total_pos_tf is not None:
+        total_pos_tf = np.sum(total_pos_tf, axis=0)
+        total_pos = np.sum(total_pos_tf)
+        total_pos_tf = total_pos_tf.flatten().tolist()[0]
 
     end = time.time()
     print "\n Time to vectorize pos terms = ", end-start, "\n"
@@ -1175,17 +1179,21 @@ class DomainModel(object):
             [total_neg_tf, neg_corpus] = tf_neg.tf(neg_text)
             self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_neg_tf"] = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_neg_tf"].vstack(total_neg_tf)
           else:
-            total_neg_tf = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_neg_tf"]
-            neg_corpus = self.extractTermsVectorizer[es_info['activeDomainIndex']]["neg_corpus"]
+            if self.extractTermsVectorizer[es_info['activeDomainIndex']].get("total_neg_tf") is not None:
+              total_neg_tf = self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_neg_tf"]
+              neg_corpus = self.extractTermsVectorizer[es_info['activeDomainIndex']]["neg_corpus"]
+            else:
+              neg_corpus = []
         else:
           self.extractTermsVectorizer[es_info['activeDomainIndex']].update({"neg":tf_neg, "neg_urls":neg_urls})
           [total_neg_tf, neg_corpus] = tf_neg.tf(neg_text)
           self.extractTermsVectorizer[es_info['activeDomainIndex']]["total_neg_tf"] = total_neg_tf
           self.extractTermsVectorizer[es_info['activeDomainIndex']]["neg_corpus"] = neg_corpus
 
-      total_neg_tf = np.sum(total_neg_tf, axis=0)
-      total_neg = np.sum(total_neg_tf)
-      total_neg_tf = total_neg_tf.flatten().tolist()[0]
+      if total_neg_tf is not None:
+        total_neg_tf = np.sum(total_neg_tf, axis=0)
+        total_neg = np.sum(total_neg_tf)
+        total_neg_tf = total_neg_tf.flatten().tolist()[0]
 
     end = time.time()
     print "\n Time to vectorize neg terms = ", end-start, "\n"
