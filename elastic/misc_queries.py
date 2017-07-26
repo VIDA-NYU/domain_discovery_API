@@ -10,7 +10,7 @@ def exec_query(query, fields, start=0, pagesCount=100, es_index='memex', es_doc_
     query = query
     query["fields"] = fields
 
-    res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pagesCount, request_timeout=30)
+    res = es.search(body=query, index=es_index, doc_type=es_doc_type, from_=start, size=pagesCount, request_timeout=60)
         
     hits = res['hits']['hits']
 

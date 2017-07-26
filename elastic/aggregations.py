@@ -32,12 +32,12 @@ def get_significant_terms(ids, termCount = 50, mapping=None, es_index='memex', e
     return [item['key'] for item in res['aggregations']['significantTerms']['buckets'] if len(item['key']) > 2]
 
 # This returns the unique values of the field and the number of documents associated with that unique value
-def get_unique_values(field, size, es_index='memex', es_doc_type='page', es=None):
+def get_unique_values(field, query, size, es_index='memex', es_doc_type='page', es=None):
     if es is None:
         es = default_es
         
 
-    query = {
+    query_body = {
         "size": 0,
         "aggs" : {
             "unique_values" : {
@@ -47,7 +47,11 @@ def get_unique_values(field, size, es_index='memex', es_doc_type='page', es=None
             }
         }
     }
-    res = es.search(body=query, index=es_index, doc_type=es_doc_type, request_timeout=30)
+
+    if query is not None:
+        query_body["query"] = query
+
+    res = es.search(body=query_body, index=es_index, doc_type=es_doc_type, request_timeout=100)
 
     return {item['key']:item['doc_count'] for item in res['aggregations']['unique_values']['buckets']}
     
