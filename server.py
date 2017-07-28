@@ -51,7 +51,8 @@ class Page(object):
     self.lock = Lock()
     # TODO Use SeedCrawlerModelAdapter self._domain_model = SeedCrawlerModelAdapter()
     self._domain_model = models["domain"]
-    self._crawler_model = models["crawler"]
+    if models.get("crawler") is not None:
+      self._crawler_model = models["crawler"]
 
 
   @cherrypy.expose
