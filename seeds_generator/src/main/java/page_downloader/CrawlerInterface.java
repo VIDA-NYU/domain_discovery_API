@@ -1,38 +1,41 @@
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.net.URL;
 import java.net.HttpURLConnection;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
-import java.io.StringReader;
-import org.apache.commons.codec.binary.Base64;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.DocumentBuilder;
-import org.xml.sax.InputSource;
-import org.w3c.dom.*;
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.action.update.UpdateRequest;
-import org.elasticsearch.index.query.MissingFilterBuilder;
-import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.search.SearchHit; 
 import org.elasticsearch.search.SearchHits; 
+import java.net.URI;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import java.util.Properties;
+import java.io.IOException;
+import java.io.FileInputStream;
+import java.net.MalformedURLException;
 
 public class CrawlerInterface implements Runnable{
     private static final Pattern linkPattern = Pattern.compile("\\s*(?i)href\\s*=\\s*(\"([^\"]*\")|'[^']*'|([^'\">\\s]+))",  Pattern.CASE_INSENSITIVE|Pattern.DOTALL);
-    private static final String accountKey = "jgRfXs073p8B87c/TJamrnIDjbeyYtH5gAe7+TYvsIw";
+    private String accountKey;
+    private Properties prop; 
     ArrayList<String> urls = null;
     ArrayList<String> html = null;
     String es_index = "memex";
@@ -40,10 +43,21 @@ public class CrawlerInterface implements Runnable{
     String es_host = "localhost";
     Client client = null;
     String crawlType = "";
-    String top = "10";
+    int top = 10;
     Download download = null;
     
     public CrawlerInterface(ArrayList<String> urls, ArrayList<String> html, String crawl_type, String top, String es_index, String es_doc_type, String es_host, Client client){
+	try{
+	    prop = new Properties();
+	    FileInputStream is = new FileInputStream("conf/config.properties");
+	    prop.load(is);
+	    accountKey = prop.getProperty("ACCOUNTKEY_BING");
+	}   
+	catch(Exception e){
+	    e.printStackTrace();
+	    prop = null;
+	}
+	
 	this.urls = urls;
 	this.html = html;
 	if(!es_index.isEmpty())
@@ -53,7 +67,7 @@ public class CrawlerInterface implements Runnable{
 	this.es_host = es_host;
 	this.client = client;
 	this.crawlType = crawl_type;
-	this.top = top;
+	this.top = Integer.parseInt(top);
 
 	String subquery = null;
 	ArrayList<String> tag = null;
@@ -69,41 +83,58 @@ public class CrawlerInterface implements Runnable{
         *- res: a list of backlinks
         */   
         HashSet<String> links = new HashSet<String>();
-        byte[] accountKeyBytes = Base64.encodeBase64((accountKey + ":" + accountKey).getBytes());
-        String accountKeyEnc = new String(accountKeyBytes);
-        for (String url: urls){
-            try{
-                String query = "inbody:" + url;
-                URL urlObj = new URL("https://api.datamarket.azure.com/Data.ashx/Bing/Search/v1/Web?Query=%27" + query + "%27&$top="+ this.top);
-                HttpURLConnection conn = (HttpURLConnection)urlObj.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setRequestProperty("Authorization", "Basic " + accountKeyEnc);
-
-                BufferedReader br = new BufferedReader(new InputStreamReader((conn.getInputStream())));
-                String output = "";
-                String line;
-                while ((line = br.readLine()) != null) {
-                    output = output + line;
-                }
-
-                conn.disconnect();
-
-                DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
-                DocumentBuilder docBuilder = docBuilderFactory.newDocumentBuilder(); 
-                InputSource is = new InputSource(new StringReader(output));
-                Document doc = docBuilder.parse(is);
-                NodeList nls = doc.getElementsByTagName("d:Url");
-                
-                for(int i=0; i<nls.getLength(); i++){
-                    Element e = (Element)nls.item(i);
-                    NodeList nl = e.getChildNodes();
-                    String u = nl.item(0).getNodeValue();
-                    links.add(u);
-                }
-            }
-            catch(Exception e){
-                e.printStackTrace();
-            }
+        for (String b_url: urls){
+	    try {
+		int step = 50; //Bing can return maximum 50 results per query
+		URIBuilder builder = new URIBuilder("https://api.cognitive.microsoft.com/bing/v5.0/search");
+		builder.setParameter("q", "inbody:"+b_url);
+		builder.setParameter("count", String.valueOf(step));
+		builder.setParameter("mkt", "en-us");
+		builder.setParameter("safesearch", "Off"); // allow results to include adult content
+		HttpClient httpclient = HttpClients.createDefault();
+		int nStart = 0;
+		for (; nStart < this.top; nStart += step){
+		    builder.setParameter("offset", String.valueOf(nStart));
+		    URI uri = builder.build();
+		    
+		    HttpGet request = new HttpGet(uri);
+		    request.setHeader("Ocp-Apim-Subscription-Key", this.accountKey);
+		    
+		    HttpResponse response = httpclient.execute(request);
+		    HttpEntity entity = response.getEntity();
+		    
+		    String json_string = EntityUtils.toString(entity);
+		    JSONObject jsResponse = new JSONObject(json_string);
+		    if(jsResponse.has("webPages")){
+			JSONObject webPagesTemp = jsResponse.getJSONObject("webPages");
+			
+			JSONArray webpages = webPagesTemp.getJSONArray("value");
+			
+			for (int i=0; i<webpages.length(); i++){
+			    JSONObject item = webpages.getJSONObject(i);
+			    String url = (String)item.get("url");
+			    try {
+				//Bing Search v5 returns weird url format, e.g., http://www.bing.com/cr?IG=1C80F8C1C1B04D4C866FD62099EF9E4E&CID=2291C45E2291669401DFCEFC23976733&rd=1&h=e9ZvWOedIV321QOg-FnBNtNHTR9Oo3Yqss9bCRYsT9o&v=1&r=http://www.cse.unsw.edu.au/%7Ecs9417ml/RL1/introduction.html&p=DevEx,5168.1. The following code remove the boilerplate
+				url = url.split(",")[0].split("v=1&r=")[1];
+				url = java.net.URLDecoder.decode(url, "UTF-8");
+			    }
+			    catch (Exception ex) {
+				url = (String)item.get("displayUrl");
+			    }
+			    links.add(url);
+			}
+		    }
+		}
+	    } 
+	    catch (MalformedURLException e1) {
+		e1.printStackTrace();
+	    } 
+	    catch (IOException e) {
+		e.printStackTrace();
+	    }
+	    catch (Exception e){
+		e.printStackTrace();
+	    }
         }
         
         ArrayList<String> res = new ArrayList<String>(links);
@@ -204,7 +235,7 @@ public class CrawlerInterface implements Runnable{
         */
         HashSet<String> links = new HashSet<String>();
         try{
-	    int count = Integer.parseInt(this.top);
+	    int count = this.top;
 	    int num = 0;
             Matcher pageMatcher = linkPattern.matcher(html);
             String domain = "http://" + (new URL(url)).getHost();
@@ -241,7 +272,7 @@ public class CrawlerInterface implements Runnable{
 	    url_info.put("link",url);
 	    url_info.put("snippet","");
 	    url_info.put("title","");
-	    
+
 	    this.download.addTask(url_info);
 	}
 
