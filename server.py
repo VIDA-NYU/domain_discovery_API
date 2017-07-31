@@ -266,12 +266,14 @@ class Page(object):
   # Crawl forward links
   @cherrypy.expose
   def getForwardLinks(self, urls, session):
+    urls = Page.extractListParam(urls)
     session = json.loads(session)
     self._domain_model.getForwardLinks(urls, session);
 
   # Crawl backward links
   @cherrypy.expose
   def getBackwardLinks(self, urls, session):
+    urls = Page.extractListParam(urls)
     session = json.loads(session)
     self._domain_model.getBackwardLinks(urls, session);
 
