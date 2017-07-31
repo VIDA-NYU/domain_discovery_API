@@ -108,6 +108,14 @@
       },
       "crawled_forward": {
           "type": "float"
+      },
+      "forward_links":{
+	    "type": "string",
+	    "index": "not_analyzed"
+      },
+      "backward_links":{
+	    "type": "string",
+	    "index": "not_analyzed"
       }
     }
   }
