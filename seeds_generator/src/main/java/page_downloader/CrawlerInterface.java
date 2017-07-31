@@ -93,6 +93,7 @@ public class CrawlerInterface implements Runnable{
 		builder.setParameter("safesearch", "Off"); // allow results to include adult content
 		HttpClient httpclient = HttpClients.createDefault();
 		int nStart = 0;
+		ArrayList<String> b_links = new ArrayList<String>();
 		for (; nStart < this.top; nStart += step){
 		    builder.setParameter("offset", String.valueOf(nStart));
 		    URI uri = builder.build();
@@ -122,9 +123,17 @@ public class CrawlerInterface implements Runnable{
 				url = (String)item.get("displayUrl");
 			    }
 			    links.add(url);
+			    b_links.add(url);
 			}
 		    }
 		}
+		UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, b_url)
+		    .doc(XContentFactory.jsonBuilder()
+			 .startObject()
+			 .field("backward_links", b_links)
+			 .endObject());
+		this.client.update(updateRequest).get();
+		
 	    } 
 	    catch (MalformedURLException e1) {
 		e1.printStackTrace();
@@ -154,7 +163,7 @@ public class CrawlerInterface implements Runnable{
 		    .setQuery(QueryBuilders.termQuery("url", url))
 		    .setFrom(0).setExplain(true)
 		    .execute()
-		    .actionGet();
+		    .actionGet(5000);
 		
 		SearchHit[] hits = searchResponse.getHits().getHits();
 		if(hits.length > 0){
@@ -162,7 +171,7 @@ public class CrawlerInterface implements Runnable{
 			Map map = hit.getSource();
 			if(map != null){
 			    if(map.get("crawled_forward") != null){
-				if((Float)map.get("crawled_forward") == 0){
+				if((Integer)map.get("crawled_forward") == 0){
 				    UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, hit.getId())
 					.doc(XContentFactory.jsonBuilder()
 					     .startObject()
@@ -172,7 +181,16 @@ public class CrawlerInterface implements Runnable{
 				    
 				    System.out.println("Crawling forward " + url);
 				    System.out.println();
-				    this.crawl_forward(url, (String)map.get("html"));
+				    ArrayList<String> fwd_links = this.crawl_forward(url, (String)map.get("html"));
+				    System.err.println("\n\n\nUPDATE FORWARD LINKS 2");
+				    System.err.println(fwd_links);
+				    System.err.println("\n\n\n");
+				    updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, hit.getId())
+					.doc(XContentFactory.jsonBuilder()
+					     .startObject()
+					     .field("forward_links", fwd_links)
+					     .endObject());
+				    this.client.update(updateRequest).get();
 				}
 			    }
 			}
@@ -192,8 +210,9 @@ public class CrawlerInterface implements Runnable{
 			       .endObject()
 			       )
 		    .execute()
-		    .actionGet();
+		    .actionGet(5000);
 		
+				
 		//Download the page
 		String domain = null;
 		try{
@@ -201,7 +220,7 @@ public class CrawlerInterface implements Runnable{
 		} catch(Exception e) {
 		    e.printStackTrace();
 		}
-		this.download.setQuery("Crawl_" + domain);
+		this.download.setQuery("BackLink_" + url);
 		JSONObject url_info = new JSONObject();
 		url_info.put("link",url);
 		url_info.put("snippet","");
@@ -214,7 +233,17 @@ public class CrawlerInterface implements Runnable{
 		System.out.println();
 		
 		String html = this.getContent(url);
-		this.crawl_forward(url, html);
+		ArrayList<String> fwd_links = this.crawl_forward(url, html);
+		System.err.println("\n\n\nUPDATE FORWARD LINKS 1");
+		System.err.println(fwd_links);
+		System.err.println("\n\n\n");
+		UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, url)
+		    .doc(XContentFactory.jsonBuilder()
+			 .startObject()
+			 .field("forward_links", fwd_links)
+			 .endObject());
+		this.client.update(updateRequest).get();
+
 	    }
 	
 	    return res;
@@ -258,6 +287,8 @@ public class CrawlerInterface implements Runnable{
             e.printStackTrace();
         }
 
+	this.download.setQuery("ForwardLink_" + url);
+
         ArrayList<String> res = new ArrayList<String>(links);
 	for(String f_url: res){
 	    String domain = this.es_index;
@@ -267,9 +298,8 @@ public class CrawlerInterface implements Runnable{
 		e.printStackTrace();
 	    }
 
-	    this.download.setQuery("Crawl_" + domain);
 	    JSONObject url_info = new JSONObject();
-	    url_info.put("link",url);
+	    url_info.put("link",f_url);
 	    url_info.put("snippet","");
 	    url_info.put("title","");
 
@@ -324,7 +354,7 @@ public class CrawlerInterface implements Runnable{
 			.setQuery(QueryBuilders.termQuery("url", this.urls.get(i)))                
 			.setFrom(0).setExplain(true)
 			.execute()
-			.actionGet();
+			.actionGet(5000);
 		} catch(Exception e){
 		    e.printStackTrace();
 		}
