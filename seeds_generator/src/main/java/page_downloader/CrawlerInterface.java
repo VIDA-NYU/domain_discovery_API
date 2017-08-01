@@ -3,6 +3,7 @@ import java.util.regex.Matcher;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Iterator;
 import java.net.URL;
 import java.net.HttpURLConnection;
 import java.io.InputStreamReader;
@@ -81,7 +82,7 @@ public class CrawlerInterface implements Runnable{
         *- urls: a list of relevant urls
         *Returns:
         *- res: a list of backlinks
-        */   
+        */
         HashSet<String> links = new HashSet<String>();
         for (String b_url: urls){
 	    try {
@@ -133,7 +134,18 @@ public class CrawlerInterface implements Runnable{
 			 .field("backward_links", b_links)
 			 .endObject());
 		this.client.update(updateRequest).get();
+
 		
+		for(String b_link: b_links){
+		    updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, b_link)
+			.doc(XContentFactory.jsonBuilder()
+			     .startObject()
+			     .field("url", b_link)
+			     .field("query", "BackLink_"+b_url)
+			     .endObject());
+		    updateRequest.docAsUpsert(true);
+		    this.client.update(updateRequest).get();
+		}
 	    } 
 	    catch (MalformedURLException e1) {
 		e1.printStackTrace();
@@ -182,9 +194,6 @@ public class CrawlerInterface implements Runnable{
 				    System.out.println("Crawling forward " + url);
 				    System.out.println();
 				    ArrayList<String> fwd_links = this.crawl_forward(url, (String)map.get("html"));
-				    System.err.println("\n\n\nUPDATE FORWARD LINKS 2");
-				    System.err.println(fwd_links);
-				    System.err.println("\n\n\n");
 				    updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, hit.getId())
 					.doc(XContentFactory.jsonBuilder()
 					     .startObject()
@@ -202,16 +211,14 @@ public class CrawlerInterface implements Runnable{
 	    
 	    for(String url: not_crawled){
 		// Update the crawled flag
-		IndexResponse indexresponse = this.client.prepareIndex(this.es_index, this.es_doc_type)
-		    .setSource(XContentFactory.jsonBuilder()
-			       .startObject()
-			       .field("url", url)
-			       .field("crawled_forward", 1)
-			       .endObject()
-			       )
-		    .execute()
-		    .actionGet(5000);
-		
+		UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, url)
+		    .doc(XContentFactory.jsonBuilder()
+			 .startObject()
+			 .field("url", url)
+			 .field("crawled_forward", 1)
+			 .endObject());
+		updateRequest.docAsUpsert(true);
+		this.client.update(updateRequest).get();
 				
 		//Download the page
 		String domain = null;
@@ -234,10 +241,7 @@ public class CrawlerInterface implements Runnable{
 		
 		String html = this.getContent(url);
 		ArrayList<String> fwd_links = this.crawl_forward(url, html);
-		System.err.println("\n\n\nUPDATE FORWARD LINKS 1");
-		System.err.println(fwd_links);
-		System.err.println("\n\n\n");
-		UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, url)
+		updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, url)
 		    .doc(XContentFactory.jsonBuilder()
 			 .startObject()
 			 .field("forward_links", fwd_links)
