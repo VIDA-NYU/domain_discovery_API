@@ -293,8 +293,9 @@ public class Download_URL implements Runnable {
 			if(hits.length == 0){
 			    jobj.field("url", url);
 			    jobj.field("domain", domain);
-			    
-			    jobj.field("query", new String[]{this.query});
+
+			    if(!this.query.isEmpty())
+				jobj.field("query", new String[]{this.query});
 
 			    if(this.subquery != null)
 				jobj.field("subquery", new String[]{this.subquery});				     				       

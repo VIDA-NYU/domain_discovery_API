@@ -141,7 +141,7 @@ public class CrawlerInterface implements Runnable{
 			.doc(XContentFactory.jsonBuilder()
 			     .startObject()
 			     .field("url", b_link)
-			     .field("query", "BackLink_"+b_url)
+			     .field("query", new String[]{"BackLink_"+b_url})
 			     .endObject());
 		    updateRequest.docAsUpsert(true);
 		    this.client.update(updateRequest).get();
@@ -221,13 +221,7 @@ public class CrawlerInterface implements Runnable{
 		this.client.update(updateRequest).get();
 				
 		//Download the page
-		String domain = null;
-		try{
-		    domain = (new URL(url)).getHost();
-		} catch(Exception e) {
-		    e.printStackTrace();
-		}
-		this.download.setQuery("BackLink_" + url);
+		this.download.setQuery("");
 		JSONObject url_info = new JSONObject();
 		url_info.put("link",url);
 		url_info.put("snippet","");
@@ -295,13 +289,6 @@ public class CrawlerInterface implements Runnable{
 
         ArrayList<String> res = new ArrayList<String>(links);
 	for(String f_url: res){
-	    String domain = this.es_index;
-	    try{
-		domain = (new URL(f_url)).getHost();
-	    } catch(Exception e) {
-		e.printStackTrace();
-	    }
-
 	    JSONObject url_info = new JSONObject();
 	    url_info.put("link",f_url);
 	    url_info.put("snippet","");
