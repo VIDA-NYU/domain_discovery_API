@@ -274,7 +274,7 @@ public class Download_URL implements Runnable {
 			    Map map = hit.getSource();
 			    ArrayList query_list = (ArrayList)map.get("query");
 			    ArrayList subquery_list = (ArrayList)map.get("subquery");
-			    if(!query_list.contains(this.query)){
+			    if(!query_list.contains(this.query) && !this.query.isEmpty()){
 				query_list.add(this.query);
 				jobj.field("query", query_list);
 			    }
