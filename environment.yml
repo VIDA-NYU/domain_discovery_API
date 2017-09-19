@@ -5,7 +5,7 @@ channels:
   - memex
   - anaconda
   - vida-nyu
-  
+
 dependencies:
     - elasticsearch
     - supervisor
@@ -27,4 +27,4 @@ dependencies:
     - networkx=1.11
     - nodejs
     - futures
-    
+    - joblib
