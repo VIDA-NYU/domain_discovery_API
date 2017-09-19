@@ -1599,20 +1599,27 @@ class DomainModel(object):
 
     return {'total': results['total'], 'results': docs}
 
-  def _getMostRecentPages(self, session):
-    es_info = self._esInfo(session['domainId'])
+  def _getMostRecentPages(self, session, fields_radviz=[]):
 
+    es_info = self._esInfo(session['domainId'])
+    fields = []
+    if not fields_radviz:
+        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+    else:
+        fields =fields_radviz
     results = []
     if session['fromDate'] is None and session['filter'] is None:
       results = get_most_recent_documents(session['from'], session['pagesCap'],
                                        es_info['mapping'],
-                                       ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                       fields,
                                        session['filter'],
                                        es_info['activeDomainIndex'],
                                        es_info['docType'],
                                        self._es)
     elif not session['fromDate'] is None and session['filter'] is None:
-        results = range_search(es_info['mapping']["timestamp"], session['fromDate'], session['toDate'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']['tag'], es_info['mapping']["timestamp"], es_info['mapping']["text"]], True, session['from'], session['pagesCap'],
+        results = range_search(es_info['mapping']["timestamp"], session['fromDate'], session['toDate'],
+                            fields,
+                            True, session['from'], session['pagesCap'],
                             es_info['activeDomainIndex'],
                             es_info['docType'],
                             self._es)
@@ -1620,6 +1627,7 @@ class DomainModel(object):
         s_fields = {}
         if not session['fromDate'] is None:
           es_info['mapping']["timestamp"] = "[" + str(session['fromDate']) + " TO " + str(session['toDate']) + "]"
+          fields[7] = es_info['mapping']["timestamp"]
 
         or_terms = session['filter'].split('OR')
         match_queries = []
@@ -1628,7 +1636,7 @@ class DomainModel(object):
         s_fields['multi_match'] = match_queries
         results = multifield_term_search(s_fields,
                                          session['from'], session['pagesCap'],
-                                         ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                                         fields,
                                          es_info['activeDomainIndex'],
                                          es_info['docType'],
                                          self._es)
@@ -1638,8 +1646,13 @@ class DomainModel(object):
 
     return results
 
-  def _getPagesForMultiCriteria(self, session):
+  def _getPagesForMultiCriteria(self, session, fields_radviz=[]):
     es_info = self._esInfo(session['domainId'])
+    fields = []
+    if not fields_radviz:
+        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+    else:
+        fields=fields_radviz
 
     s_fields = {}
     query = None
@@ -1710,7 +1723,7 @@ class DomainModel(object):
       }
 
     results = exec_query(query,
-                         ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+                         fields,
                          session['from'], session['pagesCap'],
                          es_info['activeDomainIndex'],
                          es_info['docType'],
@@ -1730,8 +1743,13 @@ class DomainModel(object):
   # def _use_rank(record):
   #   return (result.get("rank") is  None)? result["score"]: result.get("rank")
 
-  def _getPagesForQueries(self, session):
+  def _getPagesForQueries(self, session, fields_radviz=[]):
     es_info = self._esInfo(session['domainId'])
+    fields = []
+    if not fields_radviz:
+        fields = ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]]
+    else:
+        fields=fields_radviz
 
     sorting_criteria = "rank"
 
@@ -1766,7 +1784,7 @@ class DomainModel(object):
     results= multifield_term_search(s_fields,
                                     session['from'],
                                     session['pagesCap'],
-                                    ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
+                                    fields,
                                     es_info['activeDomainIndex'],
                                     es_info['docType'],
                                     self._es)
@@ -1787,8 +1805,13 @@ class DomainModel(object):
 
     return results
 
-  def _getPagesForTLDs(self, session):
+  def _getPagesForTLDs(self, session, fields_radviz=[]):
     es_info = self._esInfo(session['domainId'])
+    fields = []
+    if not fields_radviz:
+        fields = ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]]
+    else:
+        fields = fields_radviz
 
     s_fields = {}
     if not session['filter'] is None:
@@ -1814,7 +1837,7 @@ class DomainModel(object):
     results= multifield_term_search(s_fields,
                                        session['from'],
                                        session['pagesCap'],
-                                       ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]],
+                                       fields,
                                        es_info['activeDomainIndex'],
                                        es_info['docType'],
                                        self._es)
@@ -1830,8 +1853,13 @@ class DomainModel(object):
 
     return results
 
-  def _getPagesForTags(self, session):
+  def _getPagesForTags(self, session, fields_radviz=[]):
     es_info = self._esInfo(session['domainId'])
+    fields = []
+    if not fields_radviz:
+        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+    else:
+        fields = fields_radviz
 
     s_fields = {}
     if not session['filter'] is None:
@@ -1861,7 +1889,8 @@ class DomainModel(object):
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
 
-    results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+    results = multifield_term_search(s_fields, session['from'], session['pagesCap'],
+                                     fields,
                                      es_info['activeDomainIndex'],
                                      es_info['docType'],
                                      self._es)
@@ -1871,8 +1900,13 @@ class DomainModel(object):
 
     return results
 
-  def _getPagesForCrawledTags(self, session):
+  def _getPagesForCrawledTags(self, session, fields_radviz=[]):
     es_info = self._esInfo(session['domainId'])
+    fields = []
+    if not fields_radviz:
+        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+    else:
+        fields = fields_radviz
 
     s_fields = {}
     if not session['filter'] is None:
@@ -1898,7 +1932,8 @@ class DomainModel(object):
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
 
-    results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+    results = multifield_term_search(s_fields, session['from'], session['pagesCap'],
+                                     fields,
                                      es_info['activeDomainIndex'],
                                      es_info['docType'],
                                      self._es)
@@ -1908,8 +1943,13 @@ class DomainModel(object):
 
     return results
 
-  def _getPagesForModelTags(self, session):
+  def _getPagesForModelTags(self, session, fields_radviz=[]):
     es_info = self._esInfo(session['domainId'])
+    fields = []
+    if not fields_radviz:
+        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+    else:
+        fields = fields_radviz
 
     model_tags = self._onlineClassifiers[session['domainId']].get('model_tags')
     if model_tags is None:
@@ -1934,7 +1974,8 @@ class DomainModel(object):
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
 
-    results = multifield_term_search(s_fields, session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]],
+    results = multifield_term_search(s_fields, session['from'], session['pagesCap'],
+                                     fields,
                                      es_info['activeDomainIndex'],
                                      es_info['docType'],
                                      self._es)
@@ -1951,18 +1992,23 @@ class DomainModel(object):
 
     return pos_hits
 
-  def _getMoreLikePages(self, session):
+  def _getMoreLikePages(self, session, reverse=[], fields_radviz=[]):
     es_info = self._esInfo(session['domainId'])
+    fields = []
+    if not fields_radviz:
+        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+    else:
+        fields=fields_radviz
 
     hits=[]
     tags = session['selected_tags'].split(',')
     for tag in tags:
-      tag_hits = search(es_info['mapping']['tag'], [tag], session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], 'page', self._es)
+      tag_hits = search(es_info['mapping']['tag'], [tag], session['from'], session['pagesCap'], fields, es_info['activeDomainIndex'], 'page', self._es)
 
       if len(tag_hits) > 0:
         tag_urls = [field['id'] for field in tag_hits]
 
-        results = get_more_like_this(tag_urls, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], session['from'], session['from'], session['pagesCap'],  es_info['activeDomainIndex'], es_info['docType'],  self._es)
+        results = get_more_like_this(tag_urls, fields, session['from'], session['from'], session['pagesCap'],  es_info['activeDomainIndex'], es_info['docType'],  self._es)
 
         hits.extend(tag_hits[0:self._pagesCapTerms] + results)
 
@@ -2008,6 +2054,37 @@ class DomainModel(object):
 
     return hits
 
+  def getTextQuery(self, session):
+    es_info = self._esInfo(session['domainId'])
+
+    format = '%m/%d/%Y %H:%M %Z'
+    if not session.get('fromDate') is None:
+      session['fromDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['fromDate'], format)))
+
+    if not session.get('toDate') is None:
+      session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
+
+    hits = []
+    fields_radviz = ["url", "tag", "text", "description", "image_url", "title"]
+
+    if(session.get('pageRetrievalCriteria') == 'Most Recent'):
+      hits = self._getMostRecentPages(session, fields_radviz)
+    elif (session.get('pageRetrievalCriteria') == 'More like'):
+      hits = self._getMoreLikePages(session, fields_radviz)
+    elif (session.get('newPageRetrievalCriteria') == 'Multi'):
+       hits = self._getPagesForMultiCriteria(session, fields_radviz)
+    elif (session.get('pageRetrievalCriteria') == 'Queries'):
+      hits = self._getPagesForQueries(session, fields_radviz)
+    elif (session.get('pageRetrievalCriteria') == 'TLDs'):
+      hits = self._getPagesForTLDs(session, fields_radviz)
+    elif (session.get('pageRetrievalCriteria') == 'Tags'):
+      hits = self._getPagesForTags(session, fields_radviz)
+    elif (session.get('pageRetrievalCriteria') == 'Model Tags'):
+      hits = self._getPagesForModelTags(session, fields_radviz)
+    elif (session.get('pageRetrievalCriteria') == 'Crawled Tags'):
+      hits = self._getPagesForCrawledTags(session, fields_radviz)
+
+    return hits
 
 
 #######################################################################################################
