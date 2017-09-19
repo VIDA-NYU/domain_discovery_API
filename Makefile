@@ -49,7 +49,7 @@ $(DOWNLOADER_APP_TARGET): $(CONDA_ENV_TARGET) seeds_generator/pom.xml $(wildcard
 
 $(TSP_SOLVER_TARGET): ${PWD}/lib/tsp-solver-master.zip
 	source activate dd_api; \
-        apt-get install unzip; \
+  apt-get install unzip; \
 	unzip ${PWD}/lib/tsp-solver-master.zip -d ${PWD}/lib; \
 	pushd ${PWD}/lib/tsp-solver-master; \
 	python setup.py install; \
