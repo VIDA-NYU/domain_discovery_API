@@ -53,6 +53,8 @@ class Page(object):
     self._domain_model = models["domain"]
     if models.get("crawler") is not None:
       self._crawler_model = models["crawler"]
+    if models.get("radviz") is not None:
+      self._radviz_model = models["radviz"]
 
 
   @cherrypy.expose
@@ -416,6 +418,25 @@ class Page(object):
   def getAvailableDatasets(self):
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(TrainSetDataLoader._DATASET_OPTIONS.keys())
+
+#Radviz functions
+  @cherrypy.expose
+  def getRadvizPoints(self,session,filterByTerm):
+    print "before loads", session
+    session = json.loads(session)
+    print "session ----", session
+    result = self._radviz_model.getRadvizPoints(session,filterByTerm)
+    return json.dumps(result)
+
+  @cherrypy.expose
+  def getURLsMetadata(self):
+    result = self._radviz_model.getURLsMetadata()
+    return result
+
+  @cherrypy.expose
+  def computeTSP(self):
+    result = self._radviz_model.computeTSP()
+    return json.dumps(result)
 
 
   # Given dataset name, returns json with term-index and topic-term distributions for +/- examples
