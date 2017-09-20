@@ -535,7 +535,7 @@ class DomainModel(object):
     delete_document(domains.keys(), "config", "domains", self._es)
 
     self._crawlerModel.updateDomains()
-    
+
   def updateColors(self, session, colors):
     es_info = self._esInfo(session['domainId'])
 
@@ -796,7 +796,7 @@ class DomainModel(object):
 
     entries = {}
     results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
-    
+
     if applyTagFlag and len(results) > 0:
       print '\n\napplied tag ' + tag + ' to pages' + str(pages) + '\n\n'
 
@@ -865,6 +865,145 @@ class DomainModel(object):
 
     return "Completed Process."
 
+  def setPagesTag_Remove(self, pages, tag, applyTagFlag, session):
+    """ Tag the pages with the given tag which can be a custom tag or 'Relevant'/'Irrelevant' which indicate relevance or irrelevance to the domain of interest. Tags help in clustering and categorizing the pages. They also help build computational models of the domain.
+
+    Parameters:
+        pages (urls): list of urls to apply tag
+        tag (string): custom tag, 'Relevant', 'Irrelevant'
+        applyTagFlag (bool): True - Add tag, False - Remove tag
+        session (json): Should contain domainId
+
+    Returns:
+       Returns string "Completed Process"
+
+    """
+
+    es_info = self._esInfo(session['domainId'])
+
+    entries = {}
+    results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
+
+    if applyTagFlag and len(results) > 0:
+      print '\n\napplied tag ' + tag + ' to pages' + str(pages) + '\n\n'
+
+      for page in pages:
+        if not results.get(page) is None:
+          # pages to be tagged exist
+          records = results[page]
+          for record in records:
+            entry = {}
+            if record.get(es_info['mapping']['tag']) is None:
+              # there are no previous tags
+              entry[es_info['mapping']['tag']] = [tag]
+              entry["unsure_tag"] = 0
+              entry["label_pos"] = 0
+              entry["label_neg"] = 0
+            else:
+              tags = record[es_info['mapping']['tag']]
+              if len(tags) != 0:
+                # previous tags exist
+                if not tag in tags:
+                    #Remove Relevant or Irrelevant tags if it exists
+                    if tag == 'Relevant' or tag == 'Irrelevant':
+                        for tag_in in tags:
+                            if tag_in == 'Relevant' or tag_in == 'Irrelevant':
+                                tags.remove(tag_in)
+                        entry[es_info['mapping']['tag']] = tags
+                    # append new tag
+                    tags.append(tag)
+                    entry[es_info['mapping']['tag']] = tags
+                    entry["unsure_tag"] = 0
+                    entry["label_pos"] = 0
+                    entry["label_neg"] = 0
+
+                    self._removeClassifierSample(session['domainId'], record['id'])
+
+              else:
+                # add new tag
+                entry[es_info['mapping']['tag']] = [tag]
+                entry["unsure_tag"] = 0
+                entry["label_pos"] = 0
+                entry["label_neg"] = 0
+
+            if entry:
+                  entries[record['id']] =  entry
+
+    elif len(results) > 0:
+      print '\n\nremoved tag ' + tag + ' from pages' + str(pages) + '\n\n'
+
+      for page in pages:
+        if not results.get(page) is None:
+          records = results[page]
+          for record in records:
+            entry = {}
+            if not record.get(es_info['mapping']['tag']) is None:
+              tags = record[es_info['mapping']['tag']]
+              for tag_in in tags:
+                  #if tag_in == 'Relevant' or tag_in == 'Irrelevant':
+                  tags.remove(tag_in)
+              entry[es_info['mapping']['tag']] = tags
+              entries[record['id']] = entry
+
+
+    if entries:
+      update_try = 0
+      while (update_try < 10):
+        try:
+          update_document(entries, es_info['activeDomainIndex'], es_info['docType'], self._es)
+          break
+        except:
+          update_try = update_try + 1
+
+      if (session['domainId'] in self._onlineClassifiers) and (not applyTagFlag) and (tag in ["Relevant", "Irrelevant"]):
+        self._onlineClassifiers.pop(session['domainId'])
+
+    return "Completed Process."
+
+
+  def setAllPagesTag(self, pages, tag, applyTagFlag, session):
+    """ Tag ALL the pages with the given tag which can be a custom tag or 'Relevant'/'Irrelevant' which indicate relevance or irrelevance to the domain of interest. Tags help in clustering and categorizing the pages. They also help build computational models of the domain.
+
+    Parameters:
+        pages (urls): list of urls to apply tag
+        tag (string): custom tag, 'Relevant', 'Irrelevant'
+        applyTagFlag (bool): True - Add tag, False - Remove tag
+        session (json): Should contain domainId
+
+    Returns:
+       Returns string "Completed Process"
+
+    """
+    session['pagesCap']=1000000
+    """ Find pages that satisfy the specified criteria. One or more of the following criteria are specified in the session object as 'pageRetrievalCriteria':
+    'Most Recent', 'More like', 'Queries', 'Tags', 'Model Tags', 'Maybe relevant', 'Maybe irrelevant', 'Unsure' and filter by keywords specified in the session object as 'filter'
+    Parameters:
+        session (json): Should contain 'domainId','pageRetrievalCriteria' or 'filter'
+    Returns:
+        json: {url1: {snippet, image_url, title, tags, retrieved}} (tags are a list, potentially empty)
+    """
+    es_info = self._esInfo(session['domainId'])
+    #session['pagesCap'] = 12
+
+    if session.get('from') is None:
+      session['from'] = 0
+
+    format = '%m/%d/%Y %H:%M %Z'
+    if not session.get('fromDate') is None:
+      session['fromDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['fromDate'], format)))
+
+    if not session.get('toDate') is None:
+      session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
+
+    results = self._getPagesQuery(session)
+    records = results.get('results')
+    urls = []
+    for rec in records:
+        urls.append(rec["url"][0])
+    self.setPagesTag_Remove(urls, tag, applyTagFlag, session)
+
+    return "Completed Process."
+
   def setDomainsTag(self, tlds, tag, applyTagFlag, session):
     """ Tag the pages of a domain with the given tag which can be a custom tag or 'Relevant'/'Irrelevant' which indicate relevance or irrelevance to the domain of interest. Tags help in clustering and categorizing the pages. They also help build computational models of the domain.
 
@@ -906,11 +1045,11 @@ class DomainModel(object):
 
     """
     es_info = self._esInfo(session['domainId'])
-    
+
     ids = []
     for term in terms:
       ids.append(term+"_"+es_info['activeDomainIndex']+"_"+ es_info['docType'])
-      
+
     tags = get_documents_by_id(ids, ['term', 'tag'], self._termsIndex, 'terms', self._es)
 
     results = {result['term'][0]: result['tag'][0] for result in tags}
@@ -1048,21 +1187,21 @@ class DomainModel(object):
 
       urls = results.keys()
       text = results.values()
-      
+
       end = time.time()
       print "\nTime to get text for 100 query pages = ", end-start,"\n"
 
     if len(urls) > 0 and text:
       start = time.time()
-      
+
       tfidf_v = tfidf_vectorizer(max_features=1000, ngram_range=(1,3))
-        
+
       [tfidf_array,_, corpus] = tfidf_v.tfidf(text)
 
       # tfidf_v = TfidfVectorizer(max_features=1000, stop_words="english", ngram_range=(1,3))
       # tfidf_array= tfidf_v.fit_transform(text)
       # corpus = tfidf_v.get_feature_names()
-      
+
       end = time.time()
       print "\nTime to vectorize 100 query pages = ", end-start,"\n"
 
