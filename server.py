@@ -297,7 +297,17 @@ class Page(object):
     output = self._domain_model.setPagesTag(pages, tag, applyTagFlag, session)
     self.lock.release()
     return output
-
+  # Adds tag to ALL pages (if applyTagFlag is True) or removes tag from pages (if applyTagFlag is
+  # False).
+  @cherrypy.expose
+  def setAllPagesTag(self, pages, tag, applyTagFlag, session):
+    session = json.loads(session)
+    pages = Page.extractListParam(pages)
+    applyTagFlag = Page.extractBooleanParam(applyTagFlag)
+    self.lock.acquire()
+    output = self._domain_model.setAllPagesTag(pages, tag, applyTagFlag, session)
+    self.lock.release()
+    return output
   # Adds tag to pages (if applyTagFlag is True) or removes tag from pages (if applyTagFlag is
   # False).
   @cherrypy.expose
