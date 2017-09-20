@@ -17,7 +17,7 @@ TSP_SOLVER_TARGET := ${PWD}/lib/tsp-solver-master/build
 # Makefile commands, see below for actual builds
 
 ## all              : set up DD API development environment
-all: conda_env downloader_app link_word2vec_data get_react_data
+all: conda_env downloader_app link_word2vec_data get_react_data tsp_solver
 
 ## help             : show all commands.
 # Note the double '##' in the line above: this is what's matched to produce
