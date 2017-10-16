@@ -267,7 +267,6 @@ class DomainModel(object):
         json: {<tag>: <number of pages for the tag>}
 
     """
-
     es_info = self._esInfo(session['domainId'])
 
     query = {
@@ -643,6 +642,7 @@ class DomainModel(object):
     Return:
         None (Results are downloaded into elasticsearch)
     """
+    session['pagesCap']='100'
     es_info = self._esInfo(session['domainId'])
 
     results = field_exists("crawled_forward", [es_info['mapping']['url'], "crawled_forward"], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
@@ -650,9 +650,7 @@ class DomainModel(object):
     not_crawled = list(Set(urls).difference(already_crawled))
     results = get_documents(not_crawled, es_info["mapping"]['url'], [es_info["mapping"]['url']], es_info['activeDomainIndex'], es_info['docType'], self._es)
     not_crawled_urls = [results[url][0][es_info["mapping"]["url"]][0] for url in not_crawled]
-
     chdir(environ['DD_API_HOME']+'/seeds_generator')
-
     comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar StartCrawl -c forward"\
            " -u \"" + ",".join(not_crawled_urls) + "\"" + \
            " -t " + session["pagesCap"] + \
@@ -677,6 +675,7 @@ class DomainModel(object):
         None (Results are downloaded into elasticsearch)
 
     """
+    session['pagesCap']='100'
     es_info = self._esInfo(session['domainId'])
 
     results = field_exists("crawled_backward", [es_info['mapping']['url']], self._all, es_info['activeDomainIndex'], es_info['docType'], self._es)
