@@ -38,7 +38,8 @@ def fetch_data( results_data, categories=[], remove_duplicate=True, convert_to_a
                 continue
 
         try:
-            topic_name = rec["tag"][0]
+            #topic_name = rec["tag"][0]
+            topic_name = ",".join(rec["tag"])
         except KeyError:
             topic_name = "Neutral"
 
