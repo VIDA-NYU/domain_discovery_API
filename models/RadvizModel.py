@@ -23,6 +23,7 @@ class RadvizModel(DomainModel):
         #super(RadvizModel, self).__init__(path)
 
     def _esInfo(self, domainId):
+        self._domains = get_available_domains(self._es)
         es_info = {
           "activeDomainIndex": self._domains[domainId]['index'],
           "docType": self._domains[domainId]['doc_type']
