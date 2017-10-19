@@ -37,6 +37,7 @@ class CrawlerModel():
         self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain", "title":"title"}
         self._servers = {"focused": "http://"+ache_focused_crawler_server+":"+ache_focused_crawler_port,
                          "deep": 'http://'+ache_deep_crawler_server+":"+ache_deep_crawler_port}
+        self._checkCrawlers()
 
     def _encode(self, url):
         return urllib2.quote(url).replace("/", "%2F")
@@ -52,6 +53,15 @@ class CrawlerModel():
         else:
             es_info["mapping"] = self._mapping
         return es_info
+
+    def _checkCrawlers(self):
+        deep_crawl_status = self.getStatus('deep')
+        focused_crawl_status = self.getStatus('focused')
+        for domainId, info in self._domains.items():
+            if info['index'] == deep_crawl_status['esIndexName'] and deep_crawl_status["crawlerState"] == 'RUNNING':
+                self.runningCrawlers[domainId] = {'deep': {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
+            elif info['index'] == focused_crawl_status['esIndexName'] and focused_crawl_status["crawlerState"] == 'RUNNING':
+                self.runningCrawlers[domainId] = {'deep': {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
 
     def getCrawlerServers(self):
         return self._servers
@@ -354,7 +364,7 @@ class CrawlerModel():
         if self.runningCrawlers.get(domainId) is not None:
             if self.runningCrawlers[domainId].get(type) is not None:
                 return self.runningCrawlers[domainId][type]['status']
-        elif self.getStatus(type, session) == "RUNNING":
+        elif self.getStatus(type, session)["crawlerState"] == "RUNNING":
             self.runningCrawlers[domainId] = {type: {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
             return "Running"
 
@@ -413,6 +423,7 @@ class CrawlerModel():
                 payload = {"crawlType": "DeepCrawl", "seeds": seeds, "model":None}
                 r = requests.post(self._servers["deep"]+"/startCrawl", data=json.dumps(payload))
 
+                print "\n\n\n RESPONSE FROM CRAWLER ", r, "\n\n\n"
                 response = json.loads(r.text)
 
                 print "\n\nDeep Crawler Response"
@@ -447,7 +458,7 @@ class CrawlerModel():
 
         domainId = session['domainId']
 
-        if self.getStatus(type, session) == "RUNNING":
+        if self.getStatus(type, session)["crawlerState"] == "RUNNING":
             try:
                 r = requests.get(self._servers[type]+"/stopCrawl")
 
@@ -477,7 +488,7 @@ class CrawlerModel():
     def addUrls(self, seeds, session):
         domainId = session['domainId']
 
-        if self.getStatus('deep', session) == "RUNNING":
+        if self.getStatus('deep', session)["crawlerState"] == "RUNNING":
             try:
                 payload = {"seeds": seeds}
                 r = requests.post(self._servers['deep']+"/seeds", data=json.dumps(payload))
@@ -504,9 +515,10 @@ class CrawlerModel():
 # Crawler Status
 #######################################################################################################
 
-    def getStatus(self, type, session):
+    def getStatus(self, type, session=None):
 
-        domainId = session["domainId"]
+        if not session is None:
+            domainId = session["domainId"]
 
         try:
             r = requests.get(self._servers[type]+"/status")
@@ -516,23 +528,25 @@ class CrawlerModel():
             if r.status_code == 200:
                 response = json.loads(r.text)
             elif r.status_code == 404 or r.status_code == 500:
+                if not session is None:
+                    try:
+                        self.runningCrawlers[domainId][type]['status'] = "Failed to get status from server"
+                        self.crawlerStopped(type, session)
+                        return False
+                    except KeyError:
+                        return False
+
+        except ConnectionError:
+            print "\n\nFailed to connect to server for status. Server may not be running\n\n"
+            if not session is None:
                 try:
-                    self.runningCrawlers[domainId][type]['status'] = "Failed to get status from server"
+                    self.runningCrawlers[domainId][type]['status'] = "Failed to connect to server for status. Server may not be running"
                     self.crawlerStopped(type, session)
                     return False
                 except KeyError:
                     return False
 
-        except ConnectionError:
-            print "\n\nFailed to connect to server for status. Server may not be running\n\n"
-            try:
-                self.runningCrawlers[domainId][type]['status'] = "Failed to connect to server for status. Server may not be running"
-                self.crawlerStopped(type, session)
-                return False
-            except KeyError:
-                return False
-
-        return response["crawlerState"]
+        return response
 
 ##########################a#############################################################################
 # Recommendations
