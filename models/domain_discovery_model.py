@@ -163,11 +163,11 @@ class DomainModel(object):
       for k,v in runningCrawlers.items():
         for type, crawler_info in v.items():
           crawler_status = self._crawlerModel.getStatus(type,session)
-          if crawler_status["crawlerState"] == "RUNNING":
+          if crawler_status.get("crawlerState") == "RUNNING":
             status["Crawler"].append({"domain": crawler_info["domain"], "status": crawler_info["status"], "description": type})
-          elif crawler_status == "STOPPING":
+          elif crawler_status.get("crawlerState") == "STOPPING":
             status["Crawler"].append({"domain": crawler_info["domain"], "status": "Terminating", "description":type})
-          elif crawler_status == "TERMINATED":
+          elif crawler_status.get("crawlerState") == "TERMINATED":
             self._crawlerModel.crawlerStopped(type, session)
             break
 
