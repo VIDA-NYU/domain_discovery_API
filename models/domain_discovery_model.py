@@ -181,8 +181,9 @@ class DomainModel(object):
   def stopProcess(self, process, process_info):
     print "Stop Process ",process," ",process_info
     if process == "Crawler":
+      runningCrawlers = self._crawlerModel.runningCrawlers
       session = {"domainId": runningCrawlers.keys()[0]}
-      self.stopCrawler(session)
+      self._crawlerModel.stopCrawler(process_info.get('description'), session)
     elif process == "SeedFinder":
       query = process_info["description"].replace('Query: ', '')
       self.stopSeedFinder(query)
