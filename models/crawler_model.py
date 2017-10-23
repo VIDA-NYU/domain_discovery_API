@@ -392,7 +392,7 @@ class CrawlerModel():
             zip_filename = saveClientSite + es_info['activeDomainIndex'] + "_model.zip"
             with open(zip_filename, "rb") as model_file:
                 encoded_model = base64.b64encode(model_file.read())
-            payload = {"crawlType": "FocusedCrawl", "seeds": [], "model":encoded_model}
+            payload = {"crawlType": "FocusedCrawl", "esIndexName": es_info['activeDomainIndex'], "esTypeName": es_info['docType'] , "seeds": [], "model":encoded_model}
             try:
                 r = requests.post(self._servers["focused"]+"/startCrawl", data=json.dumps(payload))
                 
@@ -423,7 +423,7 @@ class CrawlerModel():
                 return "No seeds provided"
 
             try:
-                payload = {"crawlType": "DeepCrawl", "seeds": seeds, "model":None}
+                payload = {"crawlType": "DeepCrawl", "esIndexName": es_info['activeDomainIndex'], "esTypeName": es_info['docType'], "seeds": seeds, "model":None}
                 r = requests.post(self._servers["deep"]+"/startCrawl", data=json.dumps(payload))
                 
                 if r.status_code == 200:
