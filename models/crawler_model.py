@@ -68,7 +68,6 @@ class CrawlerModel():
 
     def getCrawlerServers(self):
         return self._crawler_monitors
-    
     def updateDomains(self):
         self._domains = get_available_domains(self._es)
 
@@ -243,7 +242,7 @@ class CrawlerModel():
         Returns:
         Zip file url or message text
         """
-        
+
         if len(terms) == 0:
             return "Model not created"
 
@@ -377,7 +376,7 @@ class CrawlerModel():
                 data_domain  = data_dir + es_info['activeDomainIndex']
                 domainmodel_dir = data_domain + "/models/"
                 domainoutput_dir = data_domain + "/output/"
-            
+
                 result = self.createModel(session, zip=True)
                 if "No irrelevant pages to build domain model" in result:
                     if len(terms) > 0:
@@ -386,7 +385,7 @@ class CrawlerModel():
                             return "No regex domain model available"
                     else:
                         return "No page classifier or regex domain model available"
-                
+
                 if (not isdir(domainmodel_dir)):
                     return "No domain model available"
 
@@ -398,14 +397,14 @@ class CrawlerModel():
                 payload = {"crawlType": "FocusedCrawl", "esIndexName": es_info['activeDomainIndex'], "esTypeName": es_info['docType'] , "seeds": [], "model":encoded_model}
                 try:
                     r = requests.post(self._servers["focused"]+"/startCrawl", data=json.dumps(payload))
-                
+
                     if r.status_code == 200:
                         response = json.loads(r.text)
-                    
+
                         print "\n\nFocused Crawler Response"
                         pprint(response)
                         print "\n\n"
-                    
+
                         if response["crawlerStarted"]:
                             if self.runningCrawlers.get(domainId) is None:
                                 self.runningCrawlers[domainId] = {type: {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
@@ -416,7 +415,7 @@ class CrawlerModel():
                             return "Failed to run crawler"
                     else:
                         return "Failed to connect to server. Server may not be running"
-                
+
                 except ConnectionError:
                     print "\n\nFailed to connect to server to start crawler. Server may not be running\n\n"
                     return "Failed to connect to server. Server may not be running"
@@ -430,14 +429,14 @@ class CrawlerModel():
             try:
                 payload = {"crawlType": "DeepCrawl", "esIndexName": es_info['activeDomainIndex'], "esTypeName": es_info['docType'], "seeds": seeds, "model":None}
                 r = requests.post(self._servers["deep"]+"/startCrawl", data=json.dumps(payload))
-                
+
                 if r.status_code == 200:
                     response = json.loads(r.text)
-                    
+
                     print "\n\nDeep Crawler Response"
                     pprint(response)
                     print "\n\n"
-                    
+
                     if response["crawlerStarted"]:
                         if self.runningCrawlers.get(domainId) is None:
                             self.runningCrawlers[domainId] = {type: {'domain': self._domains[domainId]['domain_name'], 'status': "Running" }}
@@ -448,11 +447,11 @@ class CrawlerModel():
                         return "Failed to run crawler"
                 else:
                     return "Failed to connect to server. Server may not be running"
-                
+
             except ConnectionError:
                 print "\n\nFailed to connect to server to start crawler. Server may not be running\n\n"
                 return "Failed to connect to server. Server may not be running"
-                
+
         return "Running in domain: " + self._domains[domainId]['domain_name']
 
     def stopCrawler(self, type, session):
@@ -531,7 +530,7 @@ class CrawlerModel():
             domainId = session["domainId"]
 
         response = {}
-        
+
         try:
             r = requests.get(self._servers[type]+"/status")
 
@@ -611,14 +610,14 @@ class CrawlerModel():
                     }
                 }
             }
-            
+
             results = exec_query(query,
                                  ['url', 'domain'],
                                  0, self._all,
                                  es_info['activeDomainIndex'],
                                  es_info['docType'],
                                  self._es)
-            
+
             domain_scored_pages = {}
             for result in results['results']:
                 if result.get('domain') is None:
@@ -631,12 +630,12 @@ class CrawlerModel():
                     domain_info[2] = domain_info[0] / float(domain_info[1])
                 else:
                     domain_info = [result['score'], 1, result['score']]
-                    
+
                 domain_scored_pages[domain] = domain_info
 
             unique_tlds = {k:{'count':v[1],'score':v[2]} for k,v in domain_scored_pages.items()}
-            
-        else:    
+
+        else:
             query = {
                 'bool':{
                     'must_not':{
@@ -667,10 +666,10 @@ class CrawlerModel():
 
         recommended_tlds = {}
 
-        for k, v in unique_tlds.items(): 
+        for k, v in unique_tlds.items():
             if k in recommendations and v['count'] >= int(num_pages):
                 recommended_tlds[k] = v
-                
+
         return recommended_tlds
 
 ##########################a#############################################################################
