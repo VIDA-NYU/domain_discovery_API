@@ -4,6 +4,7 @@ from nltk import corpus
 class tf_vectorizer:
 
     def __init__(self, convert_to_ascii=False, max_features=10000, vocabulary=None, ngram_range=(1,1)):
+
         self.convert_to_ascii = convert_to_ascii
         self.count_vect = None
         self.max_features = max_features
@@ -42,7 +43,6 @@ class tf_vectorizer:
 
             text = " ".join(ascii_text)
 
-        #preprocessed_text = " ".join([word.strip() for word in text.split(" ") if len(word.strip()) > 2 and (word.strip() != "") and (self.isnumeric(word.strip()) == False) and self.notHtmlTag(word.strip()) and self.notMonth(word.strip())])
         preprocessed_text = " ".join([word.strip() for word in text.split(" ") if len(word.strip()) > 2 and (word.strip() != "") and (self.isnumeric(word.strip()) == False) and self.notHtmlTag(word.strip()) and self.notMonth(word.strip()) ])
         return preprocessed_text
 
