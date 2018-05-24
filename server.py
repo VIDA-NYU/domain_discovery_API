@@ -11,7 +11,7 @@ from functools32 import lru_cache
 from jinja2 import Template, Environment, FileSystemLoader
 
 env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), 'html/')))
-cherrypy.engine.timeout_monitor.unsubscribe()
+#cherrypy.engine.timeout_monitor.unsubscribe()#Servers that previously disabled timeouts by invoking cherrypy.engine.timeout_monitor.unsubscribe() will now crash. For forward-compatibility with this release on older versions of CherryPy, disable timeouts using the config option::
 
 class Page(object):
   @staticmethod
