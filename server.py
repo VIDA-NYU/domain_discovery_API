@@ -332,11 +332,16 @@ class Page(object):
     applyTagFlag =  Page.extractBooleanParam(applyTagFlag)
     self._domain_model.setTermsTag(terms, tag, applyTagFlag, session)
 
-  # Update online classifier
+  # Update online classifier (it will only use the tags: Relevant and Irrelevant to create the online classifier)
   @cherrypy.expose
   def updateOnlineClassifier(self, session):
     session = json.loads(session)
     return self._domain_model.updateOnlineClassifier(session)
+  # Update classifier that will be used by the crawler (it will take into account the tags that were selected as positive and negative)
+  @cherrypy.expose
+  def updateClassifierCrawler(self, session):
+    session = json.loads(session)
+    return self._domain_model.updateClassifierCrawler(session)
 
   # Update unlabeled sample predictions
   @cherrypy.expose

@@ -86,6 +86,7 @@ class DomainModel(object):
     self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain", "title":"title"}
     self._domains = None
     self._onlineClassifiers = {}
+    self._classifiersCrawler = {}
     self._pos_tags = ['NN', 'NNS', 'NNP', 'NNPS', 'FW', 'JJ']
     self._path = path
 
@@ -2090,6 +2091,7 @@ class DomainModel(object):
 # Generate Model
 #######################################################################################################
 
+# Update online classifier (it will only use the tags: Relevant and Irrelevant to create the online classifier)
   def updateOnlineClassifier(self, session):
     domainId = session['domainId']
     es_info = self._esInfo(domainId)
@@ -2250,6 +2252,183 @@ class DomainModel(object):
     # self.results_file.write(str(len(pos_text)) +","+ str(len(neg_text)) +","+ accuracy +","+ str(unsure) +","+ str(label_pos) +","+ str(label_neg) +","+ str(len(unlabeled_urls))+"\n")
 
     return accuracy
+
+# Update classifier which will be used by the crawler (it will take into account the tags that were selected as positive and negative)
+  def updateClassifierCrawler(self, session):
+    domainId = session['domainId']
+    es_info = self._esInfo(domainId)
+
+    onlineClassifier = None
+    trainedPosSamples = []
+    trainedNegSamples = []
+    #onlineClassifierInfo = self._classifiersCrawler.get(domainId)
+    onlineClassifier = OnlineClassifier()
+    self._classifiersCrawler[domainId] = {"onlineClassifier":onlineClassifier}
+    self._classifiersCrawler[domainId]["trainedPosSamples"] = []
+    self._classifiersCrawler[domainId]["trainedNegSamples"] = []
+
+    print trainedPosSamples
+    print trainedNegSamples
+    filter_pos_tags = ["Relevant"]
+    filter_neg_tags = ["Irrelevant"]
+
+    try:
+        filter_pos_tags = session['model']['positive']
+    except KeyError:
+        print "Using default positive tags"
+
+    try:
+        filter_neg_tags = session['model']['negative']
+    except KeyError:
+        print "Using default negative tags"
+
+    # Fit classifier
+    # ****************************************************************************************
+    query = {
+      "query": {
+        "bool" : {
+          "must" : {
+            "terms" : {
+                    "tag" : filter_pos_tags,
+                    "minimum_should_match" : 1
+                }
+            }
+        }
+      },
+      "filter": {
+        "not": {
+          "filter": {
+            "ids" : {
+              "values" : trainedPosSamples
+            }
+          }
+        }
+      }
+    }
+
+    results = exec_query(query, ["url", es_info['mapping']['text']],
+                          0, self._all,
+                          es_info['activeDomainIndex'],
+                          es_info['docType'],
+                          self._es)
+    pos_docs = results["results"]
+    pos_text = [pos_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for pos_doc in pos_docs]
+    pos_ids = [pos_doc["id"] for pos_doc in pos_docs]
+    pos_labels = [1 for i in range(0, len(pos_text))]
+
+    query = {
+       "query": {
+         "bool" : {
+           "must" : {
+             "terms" : {
+                     "tag" : filter_neg_tags,
+                     "minimum_should_match" : 1
+                 }
+             }
+         }
+       },
+      "filter": {
+        "not": {
+          "filter": {
+            "ids" : {
+              "values" : trainedNegSamples
+            }
+          }
+        }
+      }
+    }
+    results = exec_query(query, ["url", es_info['mapping']['text']],
+                          0, self._all,
+                          es_info['activeDomainIndex'],
+                          es_info['docType'],
+                          self._es)
+
+    neg_docs = results["results"]
+
+    neg_text = [neg_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for neg_doc in neg_docs]
+    neg_ids = [neg_doc["id"] for neg_doc in neg_docs]
+    neg_labels = [0 for i in range(0, len(neg_text))]
+
+    print "\n\n\nNew relevant samples for updateClasssifierCrawler", len(pos_text),"\n", "New irrelevant samples updateClasssifierCrawler",len(neg_text), "\n\n\n"
+
+    clf = None
+    train_data = None
+    update = False
+    if (len(trainedPosSamples) > 0 and len(trainedNegSamples) > 0):
+      if (len(pos_text) > 0 or len(neg_text) > 0):
+        update = True
+    else:
+      if (len(pos_text) > 0 and len(neg_text) > 0):
+        update = True
+    if update:
+      if self._classifiersCrawler.get(domainId) is not None:
+        [train_data,_] = self._classifiersCrawler[domainId]["onlineClassifier"].vectorize(pos_text+neg_text)
+        clf = self._classifiersCrawler[domainId]["onlineClassifier"].partialFit(train_data, pos_labels+neg_labels)
+        if clf != None:
+          self._classifiersCrawler[domainId]["trainedPosSamples"] = self._classifiersCrawler[domainId]["trainedPosSamples"] + pos_ids
+          self._classifiersCrawler[domainId]["trainedNegSamples"] = self._classifiersCrawler[domainId]["trainedNegSamples"] + neg_ids
+
+    # ****************************************************************************************
+
+    # Fit calibratrated classifier
+
+    if train_data != None and clf != None:
+
+      trainedPosSamples = self._classifiersCrawler[domainId]["trainedPosSamples"]
+      trainedNegSamples = self._classifiersCrawler[domainId]["trainedNegSamples"]
+      if 2*len(trainedPosSamples)/3  > 2 and  2*len(trainedNegSamples)/3 > 2:
+        pos_trained_docs = get_documents_by_id(trainedPosSamples,
+                                               ["url", es_info['mapping']['text']],
+                                               es_info['activeDomainIndex'],
+                                               es_info['docType'],
+                                               self._es)
+        pos_trained_text = [pos_trained_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for pos_trained_doc in pos_trained_docs]
+        pos_trained_labels = [1 for i in range(0, len(pos_trained_text))]
+
+        neg_trained_docs = get_documents_by_id(trainedNegSamples,
+                                               ["url", es_info['mapping']['text']],
+                                               es_info['activeDomainIndex'],
+                                               es_info['docType'],
+                                               self._es)
+
+        neg_trained_text = [neg_trained_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for neg_trained_doc in neg_trained_docs]
+        neg_trained_labels = [0 for i in range(0, len(neg_trained_text))]
+        [calibrate_pos_data,_] = self._classifiersCrawler[domainId]["onlineClassifier"].vectorize(pos_trained_text)
+        [calibrate_neg_data,_] = self._classifiersCrawler[domainId]["onlineClassifier"].vectorize(neg_trained_text)
+        calibrate_pos_labels = pos_trained_labels
+        calibrate_neg_labels = neg_trained_labels
+
+        calibrate_data = sp.sparse.vstack([calibrate_pos_data, calibrate_neg_data]).toarray()
+        calibrate_labels = calibrate_pos_labels+calibrate_neg_labels
+
+        train_indices = np.random.choice(len(calibrate_labels), 2*len(calibrate_labels)/3)
+        test_indices = np.random.choice(len(calibrate_labels), len(calibrate_labels)/3)
+
+        sigmoid = onlineClassifier.calibrate(calibrate_data[train_indices], np.asarray(calibrate_labels)[train_indices])
+        if not sigmoid is None:
+          self._classifiersCrawler[domainId]["sigmoid"] = sigmoid
+          accuracy = round(self._classifiersCrawler[domainId]["onlineClassifier"].calibrateScore(sigmoid, calibrate_data[test_indices], np.asarray(calibrate_labels)[test_indices]), 4) * 100
+          self._classifiersCrawler[domainId]["accuracy"] = str(accuracy)
+
+          print "\n\n\n Accuracy = ", accuracy, "%\n\n\n"
+        else:
+          print "\n\n\nNot enough data for calibration\n\n\n"
+      else:
+        print "\n\n\nNot enough data for calibration\n\n\n"
+
+      # ****************************************************************************************
+
+
+    accuracy = '0'
+    if self._classifiersCrawler.get(domainId) != None:
+      accuracy = self._classifiersCrawler[domainId].get("accuracy")
+      if accuracy == None:
+        accuracy = '0'
+
+    # self.results_file.write(str(len(pos_text)) +","+ str(len(neg_text)) +","+ accuracy +","+ str(unsure) +","+ str(label_pos) +","+ str(label_neg) +","+ str(len(unlabeled_urls))+"\n")
+
+    return accuracy
+
 
   def _removeClassifierSample(self, domainId, sampleId):
     if self._onlineClassifiers.get(domainId) != None:
