@@ -18,8 +18,8 @@ import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.action.update.UpdateRequest;
-import org.elasticsearch.search.SearchHit; 
-import org.elasticsearch.search.SearchHits; 
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHits;
 import java.net.URI;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -36,7 +36,7 @@ import java.net.MalformedURLException;
 public class CrawlerInterface implements Runnable{
     private static final Pattern linkPattern = Pattern.compile("\\s*(?i)href\\s*=\\s*(\"([^\"]*\")|'[^']*'|([^'\">\\s]+))",  Pattern.CASE_INSENSITIVE|Pattern.DOTALL);
     private String accountKey;
-    private Properties prop; 
+    private Properties prop;
     ArrayList<String> urls = null;
     ArrayList<String> html = null;
     String es_index = "memex";
@@ -46,19 +46,19 @@ public class CrawlerInterface implements Runnable{
     String crawlType = "";
     int top = 10;
     Download download = null;
-    
+
     public CrawlerInterface(ArrayList<String> urls, ArrayList<String> html, String crawl_type, String top, String es_index, String es_doc_type, String es_host, Client client){
 	try{
 	    prop = new Properties();
 	    FileInputStream is = new FileInputStream("conf/config.properties");
 	    prop.load(is);
 	    accountKey = prop.getProperty("ACCOUNTKEY_BING");
-	}   
+	}
 	catch(Exception e){
 	    e.printStackTrace();
 	    prop = null;
 	}
-	
+
 	this.urls = urls;
 	this.html = html;
 	if(!es_index.isEmpty())
@@ -98,20 +98,20 @@ public class CrawlerInterface implements Runnable{
 		for (; nStart < this.top; nStart += step){
 		    builder.setParameter("offset", String.valueOf(nStart));
 		    URI uri = builder.build();
-		    
+
 		    HttpGet request = new HttpGet(uri);
 		    request.setHeader("Ocp-Apim-Subscription-Key", this.accountKey);
-		    
+
 		    HttpResponse response = httpclient.execute(request);
 		    HttpEntity entity = response.getEntity();
-		    
+
 		    String json_string = EntityUtils.toString(entity);
 		    JSONObject jsResponse = new JSONObject(json_string);
 		    if(jsResponse.has("webPages")){
 			JSONObject webPagesTemp = jsResponse.getJSONObject("webPages");
-			
+
 			JSONArray webpages = webPagesTemp.getJSONArray("value");
-			
+
 			for (int i=0; i<webpages.length(); i++){
 			    JSONObject item = webpages.getJSONObject(i);
 			    String url = (String)item.get("url");
@@ -135,7 +135,7 @@ public class CrawlerInterface implements Runnable{
 			 .endObject());
 		this.client.update(updateRequest).get();
 
-		
+
 		for(String b_link: b_links){
 		    updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, b_link)
 			.doc(XContentFactory.jsonBuilder()
@@ -146,10 +146,10 @@ public class CrawlerInterface implements Runnable{
 		    updateRequest.docAsUpsert(true);
 		    this.client.update(updateRequest).get();
 		}
-	    } 
+	    }
 	    catch (MalformedURLException e1) {
 		e1.printStackTrace();
-	    } 
+	    }
 	    catch (IOException e) {
 		e.printStackTrace();
 	    }
@@ -157,7 +157,7 @@ public class CrawlerInterface implements Runnable{
 		e.printStackTrace();
 	    }
         }
-        
+
         ArrayList<String> res = new ArrayList<String>(links);
 
 	System.out.println();
@@ -176,7 +176,7 @@ public class CrawlerInterface implements Runnable{
 		    .setFrom(0).setExplain(true)
 		    .execute()
 		    .actionGet(5000);
-		
+
 		SearchHit[] hits = searchResponse.getHits().getHits();
 		if(hits.length > 0){
 		    for (SearchHit hit : hits) {
@@ -190,7 +190,7 @@ public class CrawlerInterface implements Runnable{
 					     .field("crawled_forward", 1)
 					     .endObject());
 				    this.client.update(updateRequest).get();
-				    
+
 				    System.out.println("Crawling forward " + url);
 				    System.out.println();
 				    ArrayList<String> fwd_links = this.crawl_forward(url, (String)map.get("html"));
@@ -208,7 +208,7 @@ public class CrawlerInterface implements Runnable{
 		    not_crawled.add(url);
 		}
 	    }
-	    
+
 	    for(String url: not_crawled){
 		// Update the crawled flag
 		UpdateRequest updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, url)
@@ -219,20 +219,20 @@ public class CrawlerInterface implements Runnable{
 			 .endObject());
 		updateRequest.docAsUpsert(true);
 		this.client.update(updateRequest).get();
-				
+
 		//Download the page
 		this.download.setQuery("");
 		JSONObject url_info = new JSONObject();
 		url_info.put("link",url);
 		url_info.put("snippet","");
 		url_info.put("title","");
-		
+
 		this.download.addTask(url_info);
-		
+
 		//Crawl page forward
 		System.out.println("Crawling forward " + url);
 		System.out.println();
-		
+
 		String html = this.getContent(url);
 		ArrayList<String> fwd_links = this.crawl_forward(url, html);
 		updateRequest = new UpdateRequest(this.es_index, this.es_doc_type, url)
@@ -243,7 +243,7 @@ public class CrawlerInterface implements Runnable{
 		this.client.update(updateRequest).get();
 
 	    }
-	
+
 	    return res;
 	}
 	catch(Exception e){
@@ -255,7 +255,7 @@ public class CrawlerInterface implements Runnable{
     public ArrayList<String> crawl_forward(String url, String html){
         /*Extract and standarlize outlinks from the html
         *Args:
-        *- url: 
+        *- url:
         *- html: html content to be extracted
         *Returns:
         *- res: a list of urls extracted from html content
@@ -275,7 +275,7 @@ public class CrawlerInterface implements Runnable{
                         continue;
                     if (link.startsWith("/"))
                         link = domain + link;
-                    if (!link.startsWith("http://"))
+                    if (!(link.startsWith("http://") || link.startsWith("https://")))
                         continue;
                     links.add(link);
 		    num = num + 1;
@@ -304,7 +304,7 @@ public class CrawlerInterface implements Runnable{
         ArrayList<String> urls = new ArrayList<String>();
         urls.add(seed);
         ArrayList<String> res = crawl_backward(urls);
-       
+
     }
 
     public String getContent(String seed){
@@ -312,7 +312,7 @@ public class CrawlerInterface implements Runnable{
             URL url = new URL(seed);
             HttpURLConnection conn = (HttpURLConnection)url.openConnection();
             conn.setRequestMethod("GET");
-            
+
             BufferedReader br = new BufferedReader(new InputStreamReader((conn.getInputStream())));
             String output = "";
             String line;
@@ -342,7 +342,7 @@ public class CrawlerInterface implements Runnable{
 			.setTypes(this.es_doc_type)
 			.setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
 			.setFetchSource(new String[]{"html"}, null)
-			.setQuery(QueryBuilders.termQuery("url", this.urls.get(i)))                
+			.setQuery(QueryBuilders.termQuery("url", this.urls.get(i)))
 			.setFrom(0).setExplain(true)
 			.execute()
 			.actionGet(5000);
@@ -352,7 +352,7 @@ public class CrawlerInterface implements Runnable{
 
 		if(response == null)
 		    return;
-		
+
 		String html = "";
 		for (SearchHit hit : response.getHits()) {
 		    Map map = hit.getSource();
@@ -363,5 +363,5 @@ public class CrawlerInterface implements Runnable{
 	}
 	this.download.shutdown();
     }
-    
+
 }
