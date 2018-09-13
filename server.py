@@ -381,6 +381,12 @@ class Page(object):
     session = json.loads(session)
     return self._crawler_model.createModel(session)
 
+  # Get Model's results. Applying model over the whole data
+  @cherrypy.expose
+  def getResultModel(self, session):
+    session = json.loads(session)
+    return self._domain_model.getResultModel(session)
+
   # Run Crawler
   @cherrypy.expose
   def startCrawler(self, session, type="focused", seeds="", terms=""):

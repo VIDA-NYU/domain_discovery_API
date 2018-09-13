@@ -53,6 +53,7 @@ from online_classifier.online_classifier import OnlineClassifier
 from online_classifier.tfidf_vector import tfidf_vectorizer
 from online_classifier.tf_vector import tf_vectorizer
 
+
 #from topik import read_input, tokenize, vectorize, run_model, visualize, TopikProject
 
 from concurrent.futures import ThreadPoolExecutor as Pool
@@ -298,6 +299,11 @@ class DomainModel(object):
         unique_tags[tag] = 0
 
     return unique_tags
+
+  def getResultModel(self, session):
+    es_info = self._esInfo(session['domainId'])
+
+    return self.predictData(session)
 
   def getAvailableModelTags(self, session):
     es_info = self._esInfo(session['domainId'])
@@ -2267,8 +2273,8 @@ class DomainModel(object):
     self._classifiersCrawler[domainId]["trainedPosSamples"] = []
     self._classifiersCrawler[domainId]["trainedNegSamples"] = []
 
-    print trainedPosSamples
-    print trainedNegSamples
+    #print trainedPosSamples
+    #print trainedNegSamples
     filter_pos_tags = ["Relevant"]
     filter_neg_tags = ["Irrelevant"]
 
@@ -2442,6 +2448,81 @@ class DomainModel(object):
         pass
 
 
+  def predictData(self, session):
+    # Label unlabelled data
+    #
+    #TODO: Move this to Model tab functionality
+    es_info = self._esInfo(session['domainId'])
+
+    #self.updateOnlineClassifier(session)
+
+    unsure = 0
+    label_pos = 0
+    label_neg = 0
+
+    relevant_urls = []
+    irrelevant_urls = []
+    unsure_urls = []
+    if self._onlineClassifiers.get(session['domainId']) == None:
+      return
+
+    sigmoid = self._onlineClassifiers[session['domainId']].get("sigmoid")
+    if sigmoid != None:
+
+      # Select random MAX_SAMPLE
+      filters = [{ "filter" : { "missing" : { "field" : "tag"}}, "weight": 1}]
+      session['pagesCap'] = 100000
+      temp = self._getMostRecentPages(session)
+      unlabelled_docs = temp.get('results')
+
+      unlabelled_docs = [unlabelled_doc for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['text']) is not None]
+      unlabeled_text = [unlabelled_doc[es_info['mapping']['text']][0][0:MAX_TEXT_LENGTH] for unlabelled_doc in unlabelled_docs]
+
+      # Check if unlabeled data available
+      if len(unlabeled_text) > 0:
+        [unlabeled_data,_] =  self._onlineClassifiers[session['domainId']]["onlineClassifier"].vectorize(unlabeled_text)
+        [classp, calibp, cm] = self._onlineClassifiers[session['domainId']]["onlineClassifier"].predictClass(unlabeled_data,sigmoid)
+
+        pos_calib_indices = np.nonzero(calibp)
+        neg_calib_indices = np.where(calibp == 0)
+
+        pos_cm = [cm[pos_calib_indices][i][1] for i in range(0,np.shape(cm[pos_calib_indices])[0])]
+        neg_cm = [cm[neg_calib_indices][i][0] for i in range(0,np.shape(cm[neg_calib_indices])[0])]
+
+        pos_sorted_cm = pos_calib_indices[0][np.asarray(np.argsort(pos_cm)[::-1])]
+        neg_sorted_cm = neg_calib_indices[0][np.asarray(np.argsort(neg_cm)[::-1])]
+
+        model_tags = {}
+
+        for i in pos_sorted_cm:
+          if cm[i][1] < 60:
+            model_tags[unlabelled_docs[i][es_info['mapping']['url']][0]] = "Unsure"
+            unsure = unsure + 1
+            url = unlabelled_docs[i][es_info['mapping']['url']]
+            unsure_urls.append(url[0])
+          else:
+            model_tags[unlabelled_docs[i][es_info['mapping']['url']][0]] = "Maybe relevant"
+            label_pos = label_pos + 1
+            url = unlabelled_docs[i][es_info['mapping']['url']]
+            relevant_urls.append(url[0])
+
+        for i in neg_sorted_cm:
+          if cm[i][0] < 60:
+            model_tags[unlabelled_docs[i][es_info['mapping']['url']][0]] = "Unsure"
+            unsure = unsure + 1
+            url = unlabelled_docs[i][es_info['mapping']['url']]
+            unsure_urls.append(url[0])
+          else:
+            model_tags[unlabelled_docs[i][es_info['mapping']['url']][0]] = "Maybe irrelevant"
+            label_neg = label_neg + 1
+            url = unlabelled_docs[i][es_info['mapping']['url']]
+            irrelevant_urls.append(url[0])
+
+    return self._crawlerModel.createResultModel(session, relevant_urls, irrelevant_urls, unsure_urls)
+
+
+#######################################################################################################
+
   def predictUnlabeled(self, session):
     # Label unlabelled data
 
@@ -2465,9 +2546,10 @@ class DomainModel(object):
       # Select random MAX_SAMPLE
       filters = [{ "filter" : { "missing" : { "field" : "tag"}}, "weight": 1}]
       unlabelled_docs = random_sample(None, filters,  [es_info['mapping']['url'], es_info['mapping']['text']], MAX_SAMPLE,
-                                      es_info['activeDomainIndex'],
-                                      es_info['docType'],
-                                      self._es)
+                                        es_info['activeDomainIndex'],
+                                        es_info['docType'],
+                                        self._es)
+
 
 
       unlabelled_docs = [unlabelled_doc for unlabelled_doc in unlabelled_docs if unlabelled_doc.get(es_info['mapping']['text']) is not None]
@@ -2502,6 +2584,7 @@ class DomainModel(object):
             unsure = unsure + 1
           else:
             model_tags[unlabelled_docs[i][es_info['mapping']['url']][0]] = "Maybe irrelevant"
+            url_t = unlabelled_docs[i][es_info['mapping']['url']]
             label_neg = label_neg + 1
 
         self._onlineClassifiers[session['domainId']]['model_tags'] = model_tags
