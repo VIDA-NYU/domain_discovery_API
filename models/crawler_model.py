@@ -227,6 +227,84 @@ class CrawlerModel():
 
         return "Model created successfully"
 
+    def createResultModel(self, session=None, relevantUrls=[], irrelevantUrls=[], unsureUrls=[], zip=True):
+        """
+        It saves the classified data in the <project>/data/<domain> directory.
+        If zip=True all generated files are zipped into a file.
+
+        Parameters:
+        session (json): should have domainId
+
+        Returns:
+        Zip file url or message text
+        """
+        path = self._path
+
+        es_info = self._esInfo(session["domainId"])
+
+        data_dir = path + "/data/"
+        data_domain  = data_dir + es_info['activeDomainIndex']
+
+        if (not isdir(data_domain)):
+            # Create dir if it does not exist
+            makedirs(data_domain)
+        else:
+            # Remove all previous files
+            for filename in listdir(data_domain):
+                if(isfile(filename)):
+                    remove(data_domain+"/"+filename)
+
+
+        seeds_file = data_domain +"/relevantseeds.txt"
+        print "Seeds path ", seeds_file
+        with open(seeds_file, 'w') as s:
+            for url in relevantUrls:
+                try:
+                    s.write(str(url) + '\n')
+                except IOError:
+                    _, exc_obj, tb = exc_info()
+                    f = tb.tb_frame
+                    lineno = tb.tb_lineno
+                    filename = f.f_code.co_filename
+                    linecache.checkcache(filename)
+                    line = linecache.getline(filename, lineno, f.f_globals)
+                    print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
+
+        seeds_irr_file = data_domain +"/irrelevantseeds.txt"
+        print "Seeds Irrelevant path ", seeds_irr_file
+        with open(seeds_irr_file, 'w') as sn:
+            for url in irrelevantUrls:
+                try:
+                    sn.write(str(url) + '\n')
+                except IOError:
+                    _, exc_obj, tb = exc_info()
+                    f = tb.tb_frame
+                    lineno = tb.tb_lineno
+                    filename = f.f_code.co_filename
+                    linecache.checkcache(filename)
+                    line = linecache.getline(filename, lineno, f.f_globals)
+                    print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
+
+        seeds_unsure_file = data_domain +"/unsureseeds.txt"
+        print "Seeds Unsure path ", seeds_unsure_file
+        with open(seeds_unsure_file, 'w') as un:
+            for url in unsureUrls:
+                try:
+                    un.write(str(url) + '\n')
+                except IOError:
+                    _, exc_obj, tb = exc_info()
+                    f = tb.tb_frame
+                    lineno = tb.tb_lineno
+                    filename = f.f_code.co_filename
+                    linecache.checkcache(filename)
+                    line = linecache.getline(filename, lineno, f.f_globals)
+                    print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
+
+        if zip:
+            return self._createResultModelZip(session)
+
+        return "Model created successfully"
+
     def createRegExModel(self, terms=[], session=None, zip=True):
         """ Create a RegEx ACHE model to be applied to SeedFinder and focused crawler.
         It saves a pageclassifier.yml in  <project>/data/<domain> directory which contains
@@ -279,6 +357,54 @@ class CrawlerModel():
 
         return "Model created successfully"
 
+    def _createResultModelZip(self, session):
+
+        """ Create a zip of classified data
+
+        Parameters:
+        session (json): should have domainId
+
+        Returns:
+        Zip file url or message text
+        """
+
+
+        path = self._path
+
+        es_info = self._esInfo(session["domainId"])
+
+        data_dir = path + "/data/"
+
+        #print data_dir
+        #print es_info['activeDomainIndex']
+
+        data_domain  = data_dir + es_info['activeDomainIndex']
+        domainmodel_dir = data_domain + "/models/"
+
+        zip_dir = data_dir
+        #Create tha model in the client (client/build/models/). Just the client site is being exposed
+        saveClientSite = zip_dir.replace('server/data/','client/build/models/')
+        if (not isdir(saveClientSite)):
+            makedirs(saveClientSite)
+        zip_filename = saveClientSite + es_info['activeDomainIndex'] + "_results_model.zip"
+
+        with ZipFile(zip_filename, "w") as modelzip:
+            if (isfile(data_domain +"/relevantseeds.txt")):
+                print "zipping file: "+data_domain +"/relevantseeds.txt"
+                modelzip.write(data_domain +"/relevantseeds.txt", es_info['activeDomainIndex'] + "_relevant_seeds.txt")
+                chmod(zip_filename, 0o777)
+            if (isfile(data_domain +"/irrelevantseeds.txt")):
+                print "zipping file: "+data_domain +"/irrelevantseeds.txt"
+                modelzip.write(data_domain +"/irrelevantseeds.txt", es_info['activeDomainIndex'] + "_irrelevant_seeds.txt")
+                chmod(zip_filename, 0o777)
+            if (isfile(data_domain +"/unsureseeds.txt")):
+                print "zipping file: "+data_domain +"/unsureseeds.txt"
+                modelzip.write(data_domain +"/unsureseeds.txt", es_info['activeDomainIndex'] + "_unsure_seeds.txt")
+                chmod(zip_filename, 0o777)
+
+        return "models/" + es_info['activeDomainIndex'] + "_results_model.zip"
+
+#######################################################################################################
 
     def _createModelZip(self, session):
 
