@@ -1771,7 +1771,8 @@ class DomainModel(object):
     else:
       s_fields["sort"] = [{
         "rank": {
-          "order": "asc"
+          "order": "asc",
+          "ignore_unmapped" : True
         }
       }]
 
