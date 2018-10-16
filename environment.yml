@@ -5,6 +5,7 @@ channels:
   - memex
   - anaconda
   - vida-nyu
+  - conda-forge
 
 dependencies:
     - elasticsearch
@@ -13,7 +14,7 @@ dependencies:
     - dateutil
     - cython >=0.22
     - ddt-word2vec
-    - maven
+    - maven==3.5.0
     - nltk
     - scipy
     - numexpr >=2.4
