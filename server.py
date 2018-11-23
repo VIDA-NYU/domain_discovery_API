@@ -13,6 +13,7 @@ from jinja2 import Template, Environment, FileSystemLoader
 env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), 'html/')))
 #cherrypy.engine.timeout_monitor.unsubscribe()#Servers that previously disabled timeouts by invoking cherrypy.engine.timeout_monitor.unsubscribe() will now crash. For forward-compatibility with this release on older versions of CherryPy, disable timeouts using the config option::
 
+
 class Page(object):
   @staticmethod
   def getConfig(path):
@@ -332,16 +333,11 @@ class Page(object):
     applyTagFlag =  Page.extractBooleanParam(applyTagFlag)
     self._domain_model.setTermsTag(terms, tag, applyTagFlag, session)
 
-  # Update online classifier (it will only use the tags: Relevant and Irrelevant to create the online classifier)
+  # Update online classifier
   @cherrypy.expose
   def updateOnlineClassifier(self, session):
     session = json.loads(session)
     return self._domain_model.updateOnlineClassifier(session)
-  # Update classifier that will be used by the crawler (it will take into account the tags that were selected as positive and negative)
-  @cherrypy.expose
-  def updateClassifierCrawler(self, session):
-    session = json.loads(session)
-    return self._domain_model.updateClassifierCrawler(session)
 
   # Update unlabeled sample predictions
   @cherrypy.expose
@@ -380,12 +376,6 @@ class Page(object):
   def createModel(self, session):
     session = json.loads(session)
     return self._crawler_model.createModel(session)
-
-  # Get Model's results. Applying model over the whole data
-  @cherrypy.expose
-  def getResultModel(self, session):
-    session = json.loads(session)
-    return self._domain_model.getResultModel(session)
 
   # Run Crawler
   @cherrypy.expose
@@ -430,14 +420,14 @@ class Page(object):
     cherrypy.response.headers["Content-Type"] = "application/json;"
     return json.dumps(TrainSetDataLoader._DATASET_OPTIONS.keys())
 
-#Radviz functions
+  #Radviz functions
   @cherrypy.expose
-  def getRadvizPoints(self,session,filterByTerm):
-    print "before loads", session
+  def getRadvizPoints(self,session,filterByTerm, typeRadViz, nroCluster, removeKeywords):
     session = json.loads(session)
-    print "session ----", session
-    result = self._radviz_model.getRadvizPoints(session,filterByTerm)
+    removeKeywords = self.extractListParam(removeKeywords)
+    result = self._radvizModel.getRadvizPoints(session,filterByTerm, typeRadViz, nroCluster, removeKeywords)
     return json.dumps(result)
+
 
   @cherrypy.expose
   def getURLsMetadata(self):
