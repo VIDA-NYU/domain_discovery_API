@@ -10,7 +10,7 @@ CONDA_ENV := $(CONDA_ROOT)/envs/dd_api
 #CONDA_ENV := $(CONDA_ROOT)/envs/ddt
 
 CONDA_ENV_TARGET := $(CONDA_ENV)/conda-meta/history
-DOWNLOADER_APP_TARGET := seeds_generator/target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar
+DOWNLOADER_APP_TARGET := seeds_generator/target/seeds_generator-1.0-SNAPSHOT.jar
 LINK_WORD2VEC_DATA_TARGET := ranking/D_cbow_pdw_8B.pkl
 TSP_SOLVER_TARGET := ${PWD}/lib/tsp-solver-master/build
 
@@ -44,7 +44,7 @@ $(CONDA_ENV_TARGET): environment.yml
 $(DOWNLOADER_APP_TARGET): $(CONDA_ENV_TARGET) seeds_generator/pom.xml $(wildcard seeds_generator/src/main/java/page_downloader/*.java)
 	source activate dd_api; \
 	pushd seeds_generator; \
-	mvn compile assembly:single; \
+	mvn package; \
 	popd
 
 $(TSP_SOLVER_TARGET): ${PWD}/lib/tsp-solver-master.zip
