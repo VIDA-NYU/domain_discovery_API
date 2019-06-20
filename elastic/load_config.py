@@ -29,11 +29,5 @@ if __name__ == "__main__":
     else:
         es_doc_type = 'domains'
 
-    es = None
-    if len(sys.argv)>4:    
-        es_host = sys.argv[4]
-        from pyelasticsearch import ElasticSearch
-        es = ElasticSearch(es_host)
-        
     load_config(config_file, es_index, es_doc_type, es)
 
