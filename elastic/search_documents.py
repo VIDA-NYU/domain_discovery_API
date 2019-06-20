@@ -29,7 +29,7 @@ def search(field, queryStr, start=0, pageCount=100, fields = [], es_index='memex
             fields['score'] = hit['_score']
             results.append(fields)
 
-            return {"total": res['hits']['total'], 'results':results}
+        return {"total": res['hits']['total'], 'results':results}
 
 def multifield_query_search(s_fields, start=0, pageCount=100, fields = [], es_index='memex', es_doc_type='page', es=None):
     if es is None:
@@ -58,9 +58,7 @@ def multifield_query_search(s_fields, start=0, pageCount=100, fields = [], es_in
 
         results = []
         for hit in hits:
-            if hit.get('fields') is None:
-                print hit
-            else:
+            if not hit.get('fields') is None:
                 fields = hit['fields']
                 fields['id'] = hit['_id']
                 fields['score'] = hit['_score']
