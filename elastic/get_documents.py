@@ -130,10 +130,16 @@ def get_most_recent_documents(start=0, opt_maxNumberOfPages = 200, mapping=None,
 
     res = es.search(body=query, index = es_index, doc_type = es_doc_type, from_=start, request_timeout=600)
     hits = res['hits']['hits']
-
+    
     results = []
     for hit in hits:
-        fields = hit['fields']
+        if hit.get('fields') is None:
+            if hit.get('_source') is None:
+                fields = {}
+            else:
+                fields = hit['_source']
+        else:
+            fields = hit['fields']
         fields['id'] = hit['_id']
         results.append(fields)
 
@@ -175,16 +181,19 @@ def get_documents_by_id(ids=[], fields=[], es_index = 'memex', es_doc_type = 'pa
             "ids": {
                 "values": ids
             }
-        },
-        "fields": fields
+        }
     }
 
-    res = es.search(body=query, index = es_index, doc_type = es_doc_type, size=len(ids), request_timeout=30)
+    if fields:
+        query["fields"] = fields
 
+    res = es.search(body=query, index = es_index, doc_type = es_doc_type, size=len(ids), request_timeout=30)
+    #print res
     hits = res['hits']['hits']
 
     results = []
     for hit in hits:
+        #print hit
         if hit.get('fields'):
             fields = hit['fields']
             fields['id'] = hit['_id']
