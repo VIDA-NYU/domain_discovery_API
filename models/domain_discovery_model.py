@@ -84,7 +84,7 @@ class DomainModel(object):
     create_config_index()
     create_terms_index()
 
-    self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain", "title":"title"}
+    self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain", "title":"title", "description":"description"}
     self._domains = None
     self._onlineClassifiers = {}
     self._classifiersCrawler = {}
@@ -109,8 +109,10 @@ class DomainModel(object):
       "docType": self._domains[domainId]['doc_type']
     }
     if not self._domains[domainId].get("mapping") is None:
+      print 'MAPPING IN ELASTIC ',  self._domains[domainId]["mapping"]
       es_info["mapping"] = self._domains[domainId]["mapping"]
     else:
+      print 'MAPPING DEFAULT ',  self._mapping
       es_info["mapping"] = self._mapping
     return es_info
 
@@ -376,7 +378,7 @@ class DomainModel(object):
     else:
       opt_ts2 = float(opt_ts2)
     total_results = []
-    total_results = get_most_recent_documents(2000, es_info['mapping'], ["url", es_info['mapping']["tag"]],
+    total_results = get_most_recent_documents(2000, es_info['mapping'], [es_info['mapping']['url'], es_info['mapping']["tag"]],
                                       None, es_info['activeDomainIndex'], es_info['docType'],  \
                                       self._es)
     if opt_applyFilter and session['filter'] != "":
@@ -392,7 +394,7 @@ class DomainModel(object):
                                         #session['filter'], es_info['activeDomainIndex'], es_info['docType'],  \
                                         #self._es)
       results = \
-      range_search(es_info['mapping']["timestamp"], opt_ts1, opt_ts2, ['url',es_info['mapping']['tag']], True, session['pagesCap'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
+      range_search(es_info['mapping']["timestamp"], opt_ts1, opt_ts2, [es_info['mapping']['url'],es_info['mapping']['tag']], True, session['pagesCap'], es_index=es_info['activeDomainIndex'], es_doc_type=es_info['docType'], es=self._es)
 
 
     relevant = 0
@@ -515,7 +517,7 @@ class DomainModel(object):
     entry = { "domain_name": index_name.title(),
               "index": index,
               "doc_type": "page",
-              "timestamp": datetime.utcnow(),
+              "timestamp": datetime.utcnow()
             }
 
     load_config([entry])
@@ -594,14 +596,14 @@ class DomainModel(object):
       top = max_url_count
 
     if 'GOOG' in session['search_engine']:
-      comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar GoogleSearch -t ' + str(top) + \
+      comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT.jar GoogleSearch -t ' + str(top) + \
              ' -q \'' + terms + '\'' + \
              ' -i ' + es_info['activeDomainIndex'] + \
              ' -d ' + es_info['docType'] + \
              ' -s ' + es_server
 
     elif 'BING' in session['search_engine']:
-      comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar BingSearch -t ' + str(top) + \
+      comm = 'java -cp target/seeds_generator-1.0-SNAPSHOT.jar BingSearch -t ' + str(top) + \
              ' -q \'' + terms + '\'' + \
              ' -i ' + es_info['activeDomainIndex'] + \
              ' -d ' + es_info['docType'] + \
@@ -802,7 +804,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
 
     entries = {}
-    results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
+    results = get_documents(pages, es_info['mapping']['url'], [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
 
     if applyTagFlag and len(results) > 0:
       print '\n\napplied tag ' + tag + ' to pages' + str(pages) + '\n\n'
@@ -821,7 +823,7 @@ class DomainModel(object):
               entry["label_neg"] = 0
             else:
               tags = record[es_info['mapping']['tag']]
-              if len(tags) != 0:
+              if len(tags) != 0 and ("Neutral" not in tags):
                 # previous tags exist
                 if not tag in tags:
                   # append new tag
@@ -889,7 +891,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
 
     entries = {}
-    results = get_documents(pages, 'url', [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
+    results = get_documents(pages, es_info['mapping']['url'], [es_info['mapping']['tag']], es_info['activeDomainIndex'], es_info['docType'],  self._es)
 
     if applyTagFlag and len(results) > 0:
       print '\n\napplied tag ' + tag + ' to pages' + str(pages) + '\n\n'
@@ -1006,7 +1008,7 @@ class DomainModel(object):
     records = results.get('results')
     urls = []
     for rec in records:
-        urls.append(rec["url"][0])
+        urls.append(rec[es_info['mapping']['url']][0])
     self.setPagesTag_Remove(urls, tag, applyTagFlag, session)
 
     return "Completed Process."
@@ -1172,7 +1174,9 @@ class DomainModel(object):
     results = hits["results"]
 
     #avg_score = fsum([result["score"] for result in results])/len(results)
-    avg_score = (results[0]["score"] if results[0].get("score") is not None else -1)/2.0
+    avg_score = -1
+    if len(results) > 0:
+      avg_score = (results[0]["score"] if results[0].get("score") is not None else -1)/2.0
 
     end = time.time()
     print "\nTime to get query pages = ", end-start,"\n"
@@ -1188,9 +1192,10 @@ class DomainModel(object):
     else:
       url_ids = [result["id"] for result in results if result.get("score") > avg_score][0:100]
 
+    urls = []
     if(len(url_ids) > 0):
-      results = get_documents_by_id(url_ids, [es_info['mapping']["url"], es_info['mapping']["text"]], es_info["activeDomainIndex"], es_info["docType"], self._es)
-      results = {hit[es_info['mapping']["url"]][0]: " ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results if hit.get(es_info['mapping']["text"]) is not None  and hit[es_info['mapping']["text"]][0] != ""}
+      results = get_documents_by_id(url_ids, [es_info['mapping']['url'], es_info['mapping']["text"]], es_info["activeDomainIndex"], es_info["docType"], self._es)
+      results = {hit['id']: " ".join(hit[es_info['mapping']["text"]][0].split(" ")[0:MAX_TEXT_LENGTH]) for hit in results if hit.get(es_info['mapping']["text"]) is not None  and hit[es_info['mapping']["text"]][0] != ""}
 
       urls = results.keys()
       text = results.values()
@@ -1253,7 +1258,7 @@ class DomainModel(object):
     start_bar = time.time()
     start = time.time()
 
-    hits = term_search(es_info['mapping']['tag'], ['Relevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    hits = term_search(es_info['mapping']['tag'], ['Relevant'], 0, self._all, [es_info['mapping']['url'], es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
     results = hits["results"]
     pos_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results}
     pos_urls = pos_data.keys();
@@ -1299,7 +1304,7 @@ class DomainModel(object):
 
     start = time.time()
 
-    hits = term_search(es_info['mapping']['tag'], ['Irrelevant'], 0, self._all, ['url', es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
+    hits = term_search(es_info['mapping']['tag'], ['Irrelevant'], 0, self._all, [es_info['mapping']['url'], es_info['mapping']['text']], es_info['activeDomainIndex'], es_info['docType'], self._es)
     results = hits["results"]
     neg_data = {field['id']:" ".join(field[es_info['mapping']['text']][0].split(" ")[0:MAX_TEXT_LENGTH]) for field in results}
     neg_urls = neg_data.keys();
@@ -1471,8 +1476,8 @@ class DomainModel(object):
 
       doc = ["", 0, 0, [], "", ""]
 
-      if not hit.get('url') is None:
-        doc[0] = hit.get('url')
+      if not hit.get(es_info['mapping']['url']) is None:
+        doc[0] = hit.get(es_info['mapping']['url'])
       if not hit.get('x') is None:
         doc[1] = hit['x'][0]
       if not hit.get('y') is None:
@@ -1561,8 +1566,8 @@ class DomainModel(object):
     order = 0
     for hit in hits:
       doc = {}
-      if not hit.get('description') is None:
-        doc["snippet"] = " ".join(hit['description'][0].split(" ")[0:20])
+      if not hit.get(es_info['mapping']['description']) is None:
+        doc["snippet"] = " ".join(hit[es_info['mapping']['description']][0].split(" ")[0:20])
       else:
         no_image_desc_ids.add(hit["id"])
       if not hit.get('image_url') is None:
@@ -1582,10 +1587,7 @@ class DomainModel(object):
       doc["order"] = order
       order = order + 1
 
-      if(not hit.get('url') is None):
-        docs[hit['url'][0]] = doc
-      else:
-        print "\n\n\n Could not find URL for ",hit["id"],"\n\n\n"
+      docs[hit['id']] = doc
 
     if len(no_image_desc_ids) > 0:
 
@@ -1610,10 +1612,11 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
     fields = []
     if not fields_radviz:
-        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+        fields = [es_info['mapping']['url'], es_info['mapping']["description"], "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
     else:
         fields =fields_radviz
     results = []
+
     if session['fromDate'] is None and session['filter'] is None:
       results = get_most_recent_documents(session['from'], session['pagesCap'],
                                        es_info['mapping'],
@@ -1637,8 +1640,11 @@ class DomainModel(object):
 
         or_terms = session['filter'].split('OR')
         match_queries = []
+        text_fields = [es_info['mapping']["text"], es_info['mapping']["title"]+"^2"]
+        if not es_info['mapping'].get("domain") is None:
+          text_fields.append(es_info['mapping']["domain"]+"^3")
         for term in or_terms:
-          match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+          match_queries.append([term, text_fields])
         s_fields['multi_match'] = match_queries
         results = multifield_term_search(s_fields,
                                          session['from'], session['pagesCap'],
@@ -1656,7 +1662,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
     fields = []
     if not fields_radviz:
-        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+        fields = [es_info['mapping']['url'], es_info['mapping']['description'], "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
     else:
         fields=fields_radviz
 
@@ -1699,7 +1705,7 @@ class DomainModel(object):
             model_tag_filters = []
             for url, tag in model_tags.items():
               if tag in criterion:
-                model_tag_filters.append({"term":{"url":url}})
+                model_tag_filters.append({"term":{es_info['mapping']['url']:url}})
             filters.append({"or":model_tag_filters})
         elif n_criterion == 'crawled_tag':
           if criterion == "CD Relevant":
@@ -1753,7 +1759,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
     fields = []
     if not fields_radviz:
-        fields = ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]]
+        fields = [es_info['mapping']['url'], es_info['mapping']['description'], "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]]
     else:
         fields=fields_radviz
 
@@ -1763,8 +1769,13 @@ class DomainModel(object):
     if not session['filter'] is None:
       or_terms = session['filter'].split('OR')
       match_queries = []
+      text_fields = [es_info['mapping']["text"], es_info['mapping']["title"]+"^2"]
+      if not es_info['mapping'].get("domain") is None:
+        text_fields.append(es_info['mapping']["domain"]+"^3")
+
       for term in or_terms:
-        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+        match_queries.append([term, text_fields])
+      
       s_fields['multi_match'] = match_queries
 
       sorting_criteria = "score"
@@ -1816,7 +1827,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
     fields = []
     if not fields_radviz:
-        fields = ["url", "description", "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]]
+        fields = [es_info['mapping']['url'], es_info['mapping']['description'], "image_url", "title", "rank", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"]]
     else:
         fields = fields_radviz
 
@@ -1824,8 +1835,12 @@ class DomainModel(object):
     if not session['filter'] is None:
       or_terms = session['filter'].split('OR')
       match_queries = []
+      text_fields = [es_info['mapping']["text"], es_info['mapping']["title"]+"^2"]
+      if not es_info['mapping'].get("domain") is None:
+        text_fields.append(es_info['mapping']["domain"]+"^3")
+      
       for term in or_terms:
-        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+        match_queries.append([term, text_fields])
       s_fields['multi_match'] = match_queries
 
 
@@ -1864,7 +1879,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
     fields = []
     if not fields_radviz:
-        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+        fields = [es_info['mapping']['url'], es_info['mapping']['description'], "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
     else:
         fields = fields_radviz
 
@@ -1872,8 +1887,12 @@ class DomainModel(object):
     if not session['filter'] is None:
       or_terms = session['filter'].split('OR')
       match_queries = []
+      text_fields = [es_info['mapping']["text"], es_info['mapping']["title"]+"^2"]
+      if not es_info['mapping'].get("domain") is None:
+        text_fields.append(es_info['mapping']["domain"]+"^3")
+      
       for term in or_terms:
-        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+        match_queries.append([term, text_fields])
       s_fields['multi_match'] = match_queries
 
 
@@ -1911,7 +1930,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
     fields = []
     if not fields_radviz:
-        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+        fields = [es_info['mapping']['url'], es_info['mapping']['description'], "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
     else:
         fields = fields_radviz
 
@@ -1919,8 +1938,12 @@ class DomainModel(object):
     if not session['filter'] is None:
       or_terms = session['filter'].split('OR')
       match_queries = []
+      text_fields = [es_info['mapping']["text"], es_info['mapping']["title"]+"^2"]
+      if not es_info['mapping'].get("domain") is None:
+        text_fields.append(es_info['mapping']["domain"]+"^3")
+      
       for term in or_terms:
-        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+        match_queries.append([term, text_fields])
       s_fields['multi_match'] = match_queries
 
 
@@ -1954,7 +1977,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
     fields = []
     if not fields_radviz:
-        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+        fields = [es_info['mapping']['url'], es_info['mapping']['description'], "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
     else:
         fields = fields_radviz
 
@@ -1966,8 +1989,12 @@ class DomainModel(object):
     if not session['filter'] is None:
       or_terms = session['filter'].split('OR')
       match_queries = []
+      text_fields = [es_info['mapping']["text"], es_info['mapping']["title"]+"^2"]
+      if not es_info['mapping'].get("domain") is None:
+        text_fields.append(es_info['mapping']["domain"]+"^3")
+      
       for term in or_terms:
-        match_queries.append([term, [es_info['mapping']["text"], es_info['mapping']["title"]+"^2",es_info['mapping']["domain"]+"^3"]])
+        match_queries.append([term, text_fields])
       s_fields['multi_match'] = match_queries
 
 
@@ -1976,7 +2003,7 @@ class DomainModel(object):
 
     for url, tag in model_tags.items():
       if tag in tags:
-        filters.append({"term":{"url":url}})
+        filters.append({"term":{es_info['mapping']['url']:url}})
 
     if len(filters) > 0:
       s_fields["filter"] = {"or":filters}
@@ -1995,7 +2022,7 @@ class DomainModel(object):
   def _getRelevantPages(self, session):
     es_info = self._esInfo(session['domainId'])
 
-    pos_hits = search(es_info['mapping']['tag'], ['relevant'], session['from'], session['pagesCap'], ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], 'page', self._es)
+    pos_hits = search(es_info['mapping']['tag'], ['relevant'], session['from'], session['pagesCap'], [es_info['mapping']['url'], es_info['mapping']['description'], "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], es_info['activeDomainIndex'], 'page', self._es)
 
     return pos_hits
 
@@ -2003,7 +2030,7 @@ class DomainModel(object):
     es_info = self._esInfo(session['domainId'])
     fields = []
     if not fields_radviz:
-        fields = ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
+        fields = [es_info['mapping']['url'], es_info['mapping']['description'], "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]]
     else:
         fields=fields_radviz
 
@@ -2025,7 +2052,7 @@ class DomainModel(object):
       es_info = self._esInfo(session['domainId'])
       if len(tag_hits) > 0:
           tag_urls = [field['id'] for field in tag_hits]
-          results = get_more_like_this(tag_urls, ["url", "description", "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], session['pagesCap'],  es_info['activeDomainIndex'], es_info['docType'],  self._es)
+          results = get_more_like_this(tag_urls, [es_info['mapping']['url'], es_info['mapping']['description'], "image_url", "title", "x", "y", es_info['mapping']["tag"], es_info['mapping']["timestamp"], es_info['mapping']["text"]], session['pagesCap'],  es_info['activeDomainIndex'], es_info['docType'],  self._es)
           aux_result = tag_hits[0:self._pagesCapTerms] + results
       else: aux_result=tag_hits
       return aux_result
@@ -2072,7 +2099,7 @@ class DomainModel(object):
       session['toDate'] = long(DomainModel.convert_to_epoch(datetime.strptime(session['toDate'], format)))
 
     hits = []
-    fields_radviz = ["url", "tag", "text", "description", "image_url", "title"]
+    fields_radviz = [es_info['mapping']['url'], es_info['mapping']["tag"], es_info['mapping']["text"], es_info['mapping']['description'], "image_url", es_info['mapping']["title"]]
 
     if(session.get('pageRetrievalCriteria') == 'Most Recent'):
       hits = self._getMostRecentPages(session, fields_radviz)
@@ -2139,7 +2166,7 @@ class DomainModel(object):
       }
     }
 
-    results = exec_query(query, ["url", es_info['mapping']['text']],
+    results = exec_query(query, [es_info['mapping']['url'], es_info['mapping']['text']],
                           0, self._all,
                           es_info['activeDomainIndex'],
                           es_info['docType'],
@@ -2168,7 +2195,7 @@ class DomainModel(object):
         }
       }
     }
-    results = exec_query(query, ["url", es_info['mapping']['text']],
+    results = exec_query(query, [es_info['mapping']['url'], es_info['mapping']['text']],
                           0, self._all,
                           es_info['activeDomainIndex'],
                           es_info['docType'],
@@ -2209,7 +2236,7 @@ class DomainModel(object):
       trainedNegSamples = self._onlineClassifiers[domainId]["trainedNegSamples"]
       if 2*len(trainedPosSamples)/3  > 2 and  2*len(trainedNegSamples)/3 > 2:
         pos_trained_docs = get_documents_by_id(trainedPosSamples,
-                                               ["url", es_info['mapping']['text']],
+                                               [es_info['mapping']['url'], es_info['mapping']['text']],
                                                es_info['activeDomainIndex'],
                                                es_info['docType'],
                                                self._es)
@@ -2217,7 +2244,7 @@ class DomainModel(object):
         pos_trained_labels = [1 for i in range(0, len(pos_trained_text))]
 
         neg_trained_docs = get_documents_by_id(trainedNegSamples,
-                                               ["url", es_info['mapping']['text']],
+                                               [es_info['mapping']['url'], es_info['mapping']['text']],
                                                es_info['activeDomainIndex'],
                                                es_info['docType'],
                                                self._es)
@@ -2274,8 +2301,6 @@ class DomainModel(object):
     self._classifiersCrawler[domainId]["trainedPosSamples"] = []
     self._classifiersCrawler[domainId]["trainedNegSamples"] = []
 
-    #print trainedPosSamples
-    #print trainedNegSamples
     filter_pos_tags = ["Relevant"]
     filter_neg_tags = ["Irrelevant"]
 
@@ -2313,7 +2338,7 @@ class DomainModel(object):
       }
     }
 
-    results = exec_query(query, ["url", es_info['mapping']['text']],
+    results = exec_query(query, [es_info['mapping']['url'], es_info['mapping']['text']],
                           0, self._all,
                           es_info['activeDomainIndex'],
                           es_info['docType'],
@@ -2344,7 +2369,7 @@ class DomainModel(object):
         }
       }
     }
-    results = exec_query(query, ["url", es_info['mapping']['text']],
+    results = exec_query(query, [es_info['mapping']['url'], es_info['mapping']['text']],
                           0, self._all,
                           es_info['activeDomainIndex'],
                           es_info['docType'],
@@ -2385,7 +2410,7 @@ class DomainModel(object):
       trainedNegSamples = self._classifiersCrawler[domainId]["trainedNegSamples"]
       if 2*len(trainedPosSamples)/3  > 2 and  2*len(trainedNegSamples)/3 > 2:
         pos_trained_docs = get_documents_by_id(trainedPosSamples,
-                                               ["url", es_info['mapping']['text']],
+                                               [es_info['mapping']['url'], es_info['mapping']['text']],
                                                es_info['activeDomainIndex'],
                                                es_info['docType'],
                                                self._es)
@@ -2393,7 +2418,7 @@ class DomainModel(object):
         pos_trained_labels = [1 for i in range(0, len(pos_trained_text))]
 
         neg_trained_docs = get_documents_by_id(trainedNegSamples,
-                                               ["url", es_info['mapping']['text']],
+                                               [es_info['mapping']['url'], es_info['mapping']['text']],
                                                es_info['activeDomainIndex'],
                                                es_info['docType'],
                                                self._es)
