@@ -38,7 +38,7 @@ class RadvizModel(DomainModel):
         self._path = path
         super(RadvizModel, self).__init__(path)
         self._domains = get_available_domains(self._es)
-        self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain", "title":"title"}
+        self._mapping = {"url":"url", "timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query", "domain":"domain", "title":"title", "description":"description"}
 
     def _esInfo(self, domainId):
         es_info = {
@@ -55,16 +55,19 @@ class RadvizModel(DomainModel):
         return np.where(np.array(labels_array) == clustNum)[0]
 
     def Kmeans(self, data, nro_cluster ):
-        random_state = 170
-        vectorizer = TfidfVectorizer(max_features=2000)
-        vectors = vectorizer.fit_transform(data)
-        #convert sparce matrix to dense matrix
-        sparceMatrix = vectors
-        X_norm = (sparceMatrix - sparceMatrix.min())/(sparceMatrix.max() - sparceMatrix.min())
-        denseMatrix = X_norm.todense()
-        X = denseMatrix
-        yPredKmeans = KMeans(n_clusters=nro_cluster, random_state=random_state).fit_predict(X) #Kmeans
-        return yPredKmeans
+        if len(data) > 0:
+            random_state = 170
+            vectorizer = TfidfVectorizer(max_features=2000)
+            vectors = vectorizer.fit_transform(data)
+            #convert sparce matrix to dense matrix
+            sparceMatrix = vectors
+            X_norm = (sparceMatrix - sparceMatrix.min())/(sparceMatrix.max() - sparceMatrix.min())
+            denseMatrix = X_norm.todense()
+            X = denseMatrix
+            yPredKmeans = KMeans(n_clusters=nro_cluster, random_state=random_state).fit_predict(X) #Kmeans
+            return yPredKmeans
+        else:
+            return None
 
 
     def getRandomSample_inCluster(self, nro_cluster, y_Pred, raw_data, labels):
@@ -114,7 +117,7 @@ class RadvizModel(DomainModel):
                 original_imageUrls.append(image_urls[j])
             clusters_RawData.append(cluster)
             random_id = random.randint(0,len(idsData_cluster)-1)
-            subset_raw_data.append(raw_data[idsData_cluster[3]]) #3
+            subset_raw_data.append(raw_data[idsData_cluster[random_id]]) #3
             #label_by_clusters.append(labels[idsData_cluster[3]]) #3
             label_by_clusters.append(i) #3
 
@@ -499,11 +502,16 @@ class RadvizModel(DomainModel):
             return [X_test, labels, urls, titles, snippets, image_urls, cluster_labels]
 
     def getRadvizPoints(self, session, filterByTerm, typeRadViz, nroCluster, removeKeywords):
-        es_info = self._esInfo(session['domainId'])
-        index = es_info['activeDomainIndex']
         max_features = 200
-
-        ddteval_data = fetch_data(index, filterByTerm, removeKeywords, es_doc_type=es_doc_type, es=es)
+        session['filter'] = None
+        if filterByTerm:
+            session['filter'] = filterByTerm
+        if session.get('from') is None:
+            session['from'] = 0
+        session['pagesCap'] = 5000
+        pages = self.getTextQuery(session)
+        print '\n\n\n FILTER  ', filterByTerm
+        ddteval_data = fetch_data(pages['results'], removeKeywords)
         if session['domainId'] == "AV9z2HmeoAktwC6sp6_q":
             [ data_train, data_test, labels_train, labels_test, urls_train, urls_test, titles_train, titles_test, snippets_train, snippets_test, image_urls_train, image_urls_test, unique_labels_train, unique_labels_test ] = self.getData(typeRadViz)
             data = data_train
@@ -599,8 +607,8 @@ class RadvizModel(DomainModel):
             print "Nothing to do"
 
         matrix_transpose = np.transpose(X_test.todense())
-        print "\n\n Number of 1-gram features = ", len(features)
-        print "\n\n tf 1-gram matrix size = ", np.shape(X_test)
+        #print "\n\n Number of 1-gram features = ", len(features)
+        #print "\n\n tf 1-gram matrix size = ", np.shape(X_test)
         # data = self.radviz.loadData_pkl("data/ht_data_200.pkl").todense()
 
         # data = np.transpose(data)
