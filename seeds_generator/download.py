@@ -41,7 +41,7 @@ def download(inputfile, es_index = "memex", es_doc_type = "page", es_host="http:
     for line in f:
       query = line.strip();
 
-  comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar Download " \
+  comm = "java -cp target/seeds_generator-1.0-SNAPSHOT.jar Download " \
          + inputfile + ' "' + query +'" ' + es_index + " " + es_doc_type + " " + es_host;
 
   p=Popen(comm, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
@@ -64,7 +64,7 @@ def callDownloadUrls(query, subquery, urls_str, tag, es_info):
   print "\n\n\n Downloading URLS \n", urls, "\n\n\n"
   if len(urls) >= step:
     for url_size in range(0, len(urls), step):
-      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar Download_urls -q \"" + query + "\" -u \"" + " ".join(urls[url_size:url_size + step]) + "\"" \
+      comm = "java -cp target/seeds_generator-1.0-SNAPSHOT.jar Download_urls -q \"" + query + "\" -u \"" + " ".join(urls[url_size:url_size + step]) + "\"" \
              " -i " + es_info['activeDomainIndex'] + \
              " -d " + es_info['docType'] + \
              " -s " + es_server
@@ -81,7 +81,7 @@ def callDownloadUrls(query, subquery, urls_str, tag, es_info):
       print errors
       
   if len(urls[url_size:]) < step:
-    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT-jar-with-dependencies.jar Download_urls -q \"" + query + "\" -u \"" + " ".join(urls[url_size:]) + "\"" \
+    comm = "java -cp target/seeds_generator-1.0-SNAPSHOT.jar Download_urls -q \"" + query + "\" -u \"" + " ".join(urls[url_size:]) + "\"" \
            " -i " + es_info['activeDomainIndex'] + \
            " -d " + es_info['docType'] + \
            " -s " + es_server
