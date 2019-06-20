@@ -5,72 +5,13 @@ from elasticsearch import Elasticsearch
 from pprint import pprint
 
 
-def fetch_data( index, filterByTerm, removeKeywords, categories=[], remove_duplicate=True, convert_to_ascii=True, preprocess=False, es_doc_type="page", es=None):
+def fetch_data(records, removeKeywords, categories=[], remove_duplicate=True, convert_to_ascii=True, preprocess=False):
 
-    if es == None:
-        es = Elasticsearch("http://localhost:9200")
-
-    print index
-    print categories
+    print 'CATEGORIES ', categories
 
     MAX_WORDS = 1000
 
-    index = index
-    doctype = es_doc_type
-    mapping = {"timestamp":"retrieved", "text":"text", "html":"html", "tag":"tag", "query":"query"}
-
-    records = []
-
     fields = ["url", "tag", "text", "description", "image_url", "title"]
-    query = {
-        "query": {
-            "match_all": {}
-        },
-        "fields": fields,
-        "size": 100000000
-    }
-    if filterByTerm != "":
-        query = "(text:" + filterByTerm + ")"
-        query = {
-            "query": {
-                "query_string": {
-                    "query": query
-                }
-            },
-            "fields": fields,
-            "size": 100000000
-        }
-
-    if len(categories) > 0:
-        query = {
-            "query" : {
-                "filtered" : {
-                    "filter" : {
-                        "exists" : { "field" : "tag" }
-                    }
-                }
-            },
-            "fields": fields,
-            #size": 3000
-            "size": 100000000
-        }
-
-    res = es.search(body=query,
-                    index=index,
-                    doc_type=doctype, request_timeout=2000)
-
-    if res['hits']['hits']:
-        hits = res['hits']['hits']
-
-    for hit in hits:
-        record = {}
-        if not hit.get('fields') is None:
-            record = hit['fields']
-            record['id'] =hit['_id']
-            records.append(record)
-
-    del res
-    del hits
 
     result = {}
     labels = []
@@ -117,7 +58,7 @@ def fetch_data( index, filterByTerm, removeKeywords, categories=[], remove_dupli
                     text.append(rec["text"][0][0:MAX_WORDS])
                 else:
                     continue
-            urls.append(rec["url"][0])
+            urls.append(rec["id"])
             if not rec.get('description') is None:
                 snippet.append(" ".join(rec['description'][0].split(" ")[0:20]))
             else:
@@ -149,6 +90,7 @@ def fetch_data( index, filterByTerm, removeKeywords, categories=[], remove_dupli
     result["snippet"] = snippet
     result["title"] =title
     result["image_url"] = image_url
+
     return result
 
 def preprocess(text, convert_to_ascii=True):
@@ -186,7 +128,6 @@ def preprocessF(removeKeywords, text):
                 continue
 
         text = " ".join(ascii_text)
-    print text
     preprocessed_text = " ".join([word.strip() for word in text.split(" ") if len(word.strip()) > 2 and (word.strip() != "") and (isnumeric(word.strip()) == False) and notHtmlTag(word.strip()) and notMonth(word.strip()) and notSelectedKeywords(word.strip(), removeKeywords)])
     return preprocessed_text
 
