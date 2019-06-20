@@ -109,10 +109,8 @@ class DomainModel(object):
       "docType": self._domains[domainId]['doc_type']
     }
     if not self._domains[domainId].get("mapping") is None:
-      print 'MAPPING IN ELASTIC ',  self._domains[domainId]["mapping"]
       es_info["mapping"] = self._domains[domainId]["mapping"]
     else:
-      print 'MAPPING DEFAULT ',  self._mapping
       es_info["mapping"] = self._mapping
     return es_info
 
