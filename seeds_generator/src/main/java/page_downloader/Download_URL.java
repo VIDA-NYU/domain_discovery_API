@@ -1,6 +1,7 @@
 import java.io.IOException;
 import java.util.Date;
 import java.util.Map;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.TimeZone;
 import java.text.SimpleDateFormat;
@@ -25,6 +26,8 @@ import org.apache.http.util.EntityUtils;
 import org.apache.http.params.HttpParams;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
+import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.client.protocol.HttpClientContext;
 //import org.apache.commons.httpclient.params.HttpConnectionParams;
 import org.apache.http.client.HttpClient;
 
@@ -195,13 +198,17 @@ public class Download_URL implements Runnable {
 	    String domain = url.getHost();
 	    
 	    HttpResponse response = null;
+	    BasicHttpContext localContext=new BasicHttpContext();
 	    
-	    response = httpclient.execute(request);
+	    response = httpclient.execute(request, localContext);
 	    //System.err.println("\n\nEXECUTE REQUEST:  "+String.valueOf( System.currentTimeMillis()-start/1000.0)+"\n\n");
 	    
 	    int status = response.getStatusLine().getStatusCode();
 
 	    if (status >= 200 && status < 300) {
+		
+		HttpClientContext clientContext = HttpClientContext.adapt(localContext);
+		List<URI> redirected_urls = clientContext.getRedirectLocations();
 		
 		HttpEntity entity = response.getEntity();
 		if(entity != null){
@@ -263,6 +270,7 @@ public class Download_URL implements Runnable {
 			    .field("retrieved", timestamp)
 			    .field("image_url", new URI(imageUrl))
 			    .field("description", description)
+			    .field("redirect", redirected_urls)
 			    .field("rank", this.rank);
 
 			if(tag !=null && !tag.isEmpty())
@@ -293,6 +301,7 @@ public class Download_URL implements Runnable {
 			if(hits.length == 0){
 			    jobj.field("url", url);
 			    jobj.field("domain", domain);
+			    jobj.field("domain.exact", domain);
 
 			    if(!this.query.isEmpty())
 				jobj.field("query", new String[]{this.query});
