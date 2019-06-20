@@ -33,6 +33,15 @@
 		    },
 		    "content-type":{
 			"type": "string"
+		    },
+		    "description":{
+			"type": "string"
+		    },
+		    "domain": {
+			"type": "string"
+		    },
+		    "title": {
+			"type": "string"			
 		    }
 		}
 	    },
