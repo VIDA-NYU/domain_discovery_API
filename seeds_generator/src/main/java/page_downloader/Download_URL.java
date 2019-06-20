@@ -270,8 +270,11 @@ public class Download_URL implements Runnable {
 			    .field("retrieved", timestamp)
 			    .field("image_url", new URI(imageUrl))
 			    .field("description", description)
-			    .field("redirect", redirected_urls)
 			    .field("rank", this.rank);
+
+			if(redirected_urls != null && !redirected_urls.isEmpty())
+			    jobj.field("redirect", redirected_urls)
+
 
 			if(tag !=null && !tag.isEmpty())
 			    jobj.field("tag", this.tag);
